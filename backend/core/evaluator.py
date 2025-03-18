@@ -88,7 +88,7 @@ class PromptEvaluator:
         """
         try:
             logger.info("Iniciando thread de avaliação com Assistant")
-            thread = await self.openai_client.beta.threads.create()
+            thread = self.openai_client.beta.threads.create()
             
             # Formata a mensagem com prompt e contexto
             target_llm = getattr(prompt, 'target_llm', None) if hasattr(prompt, 'target_llm') else None
@@ -100,7 +100,7 @@ class PromptEvaluator:
                 message_content += f"\n\nContexto adicional: {prompt_context}"
             
             logger.info("Adicionando mensagem à thread")
-            message = await self.openai_client.beta.threads.messages.create(
+            message = self.openai_client.beta.threads.messages.create(
                 thread_id=thread.id,
                 role="user",
                 content=message_content
@@ -108,7 +108,7 @@ class PromptEvaluator:
             
             # Inicia a execução
             logger.info(f"Executando o assistant {self.assistant_id}")
-            run = await self.openai_client.beta.threads.runs.create(
+            run = self.openai_client.beta.threads.runs.create(
                 thread_id=thread.id,
                 assistant_id=self.assistant_id
             )
@@ -117,7 +117,7 @@ class PromptEvaluator:
             while run.status not in ["completed", "failed", "cancelled", "expired"]:
                 logger.info(f"Verificando status: {run.status}")
                 await asyncio.sleep(0.5)
-                run = await self.openai_client.beta.threads.runs.retrieve(
+                run = self.openai_client.beta.threads.runs.retrieve(
                     thread_id=thread.id,
                     run_id=run.id
                 )
@@ -129,7 +129,7 @@ class PromptEvaluator:
                 
             # Obtém as mensagens
             logger.info("Recuperando mensagem de resposta")
-            messages = await self.openai_client.beta.threads.messages.list(
+            messages = self.openai_client.beta.threads.messages.list(
                 thread_id=thread.id
             )
             

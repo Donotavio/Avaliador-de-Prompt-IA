@@ -10,10 +10,14 @@ const App: React.FC = () => {
     <div className="app">
       <header className="app-header">
         <h1>Avaliador de Prompts IA</h1>
+        <p>Otimize seus prompts para resultados melhores com qualquer LLM</p>
       </header>
       <main className="app-main">
         <PromptForm userId={userId} />
       </main>
+      <footer className="app-footer">
+        <p>&copy; {new Date().getFullYear()} Avaliador de Prompts IA. Todos os direitos reservados.</p>
+      </footer>
     </div>
   );
 };

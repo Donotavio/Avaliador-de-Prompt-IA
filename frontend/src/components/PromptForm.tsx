@@ -1,6 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { logger } from '../utils/logger';
 import PremiumModal from './PremiumModal';
+import EvaluationResult from './EvaluationResult';
+
+// Ícones SVG inline
+const SparkleIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3l1.7 4.3h4.3l-3.5 3 1.5 4.3-4-3-4 3 1.5-4.3-3.5-3h4.3z"></path>
+  </svg>
+);
+
+const ResetIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M23 4v6h-6"></path>
+    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+  </svg>
+);
+
+const SendIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="22" y1="2" x2="11" y2="13"></line>
+    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+  </svg>
+);
+
+const AlertIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"></circle>
+    <line x1="12" y1="8" x2="12" y2="12"></line>
+    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+  </svg>
+);
 
 interface PromptFormProps {
   userId: string;
@@ -178,21 +208,24 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
 
   return (
     <>
-      <form className="prompt-form" onSubmit={handleSubmit}>
-        <div className="form-section">
+      <div className="form-section">
+        <div className="form-section-header">
           <div className={`status-badge ${canUsePremium ? 'premium' : 'free'}`}>
             {canUsePremium ? 'Premium' : 'Gratuito'}
           </div>
           <p className="status-message">
             {canUsePremium ? premiumMessage : canUseFree ? freeMessage : 'Limite de uso gratuito atingido'}
           </p>
+        </div>
 
-          {error && (
-            <div className="error-message">
-              {error}
-            </div>
-          )}
+        {error && (
+          <div className="error-message error">
+            <AlertIcon />
+            {error}
+          </div>
+        )}
 
+        <form className="prompt-form" onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="prompt">Prompt*</label>
             <textarea
@@ -246,7 +279,7 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
               className="submit-button"
               disabled={isLoading || (!canUsePremium && !canUseFree)}
             >
-              {isLoading ? 'Avaliando...' : 'Avaliar Prompt'}
+              {isLoading ? <><div className="spinner"></div>Avaliando...</> : <><SendIcon />Avaliar Prompt</>}
             </button>
             
             {!canUsePremium && !hasPremiumExpired && (
@@ -256,6 +289,7 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
                 onClick={activatePremium}
                 disabled={isLoading}
               >
+                <SparkleIcon />
                 Ativar Premium
               </button>
             )}
@@ -267,6 +301,7 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
                 onClick={() => setIsModalOpen(true)}
                 disabled={isLoading}
               >
+                <SparkleIcon />
                 Assinar Premium
               </button>
             )}
@@ -277,60 +312,22 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
               onClick={resetUsage}
               disabled={isLoading}
             >
+              <ResetIcon />
               Resetar Uso
             </button>
           </div>
+        </form>
+      </div>
+
+      {evaluation && (
+        <div className="feedback-section">
+          <EvaluationResult result={evaluation} />
         </div>
+      )}
 
-        {isLoading && (
-          <div className="loading">
-            <div className="spinner"></div>
-            <p>Avaliando seu prompt...</p>
-          </div>
-        )}
-
-        {evaluation && (
-          <div className="feedback-section">
-            <h2>Resultado da Avaliação</h2>
-            
-            <div className="scores">
-              <div className="score-item">
-                <h3>Clareza</h3>
-                <div className="score-value">{evaluation.clarity_score}/10</div>
-              </div>
-              
-              <div className="score-item">
-                <h3>Contexto</h3>
-                <div className="score-value">{evaluation.context_score}/10</div>
-              </div>
-              
-              <div className="score-item">
-                <h3>Eficácia</h3>
-                <div className="score-value">{evaluation.effectiveness_score}/10</div>
-              </div>
-            </div>
-            
-            <div className="suggestions">
-              <h3>Sugestões</h3>
-              <ul>
-                {evaluation.suggestions.map((suggestion, index) => (
-                  <li key={index}>{suggestion}</li>
-                ))}
-              </ul>
-            </div>
-            
-            <div className="optimized-prompt">
-              <h3>Prompt Otimizado</h3>
-              <pre>{evaluation.optimized_prompt}</pre>
-            </div>
-          </div>
-        )}
-      </form>
-
-      <PremiumModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
+      {isModalOpen && (
+        <PremiumModal onClose={() => setIsModalOpen(false)} />
+      )}
     </>
   );
 };
