@@ -576,9 +576,47 @@ body {
   margin-top: 2rem;
 }
 
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.section-header h3 {
+  margin: 0;
+}
+
+.copy-button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.copy-button:hover {
+  background-color: var(--secondary-color);
+  transform: translateY(-1px);
+}
+
+.copy-button:active {
+  transform: translateY(0);
+}
+
+.copy-button.copied {
+  background-color: #22c55e;
+}
+
 .prompt-box {
   background-color: var(--card-background);
-  padding: 1.25rem;
+  padding: 1.5rem;
   border-radius: var(--radius-md);
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -586,6 +624,10 @@ body {
   font-size: 0.95rem;
   line-height: 1.6;
   box-shadow: var(--shadow-sm);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .premium-status-section {
@@ -594,4 +636,40 @@ body {
   background-color: #f1f5f9;
   border-radius: var(--radius-md);
   border-left: 4px solid var(--accent-color);
+}
+
+.no-data-message {
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-style: italic;
+  text-align: center;
+  border: 1px dashed var(--border-color);
+}
+
+.optimized-prompt-section {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background-color: rgba(37, 99, 235, 0.05);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(37, 99, 235, 0.1);
+}
+
+.optimized-prompt-section h3 {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+@media (max-width: 480px) {
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  
+  .copy-button {
+    width: 100%;
+    justify-content: center;
+  }
 } 

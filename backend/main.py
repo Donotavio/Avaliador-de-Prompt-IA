@@ -73,7 +73,14 @@ async def evaluate_prompt(request: PromptRequest):
         evaluation = await evaluator.evaluate(request)
         logger.info("Avaliação concluída com sucesso")
 
-        return PromptResponse(original_prompt=request, evaluation=evaluation)
+        # Log do resultado para debug
+        response = PromptResponse(
+            original_prompt=request,
+            evaluation=evaluation
+        )
+        logger.info(f"Resultado enviado ao frontend: {evaluation.dict()}")
+
+        return response
 
     except ValueError as e:
         logger.error(f"Erro de validação: {str(e)}")

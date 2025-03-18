@@ -167,60 +167,106 @@ class PromptEvaluator:
             Dict[str, Any]: Dicionário com os resultados processados.
         """
         try:
+            # Adiciona log para info da resposta completa
+            logger.info(f"Resposta completa do assistant:\n{content}")
+            
+            # Expressões regulares melhoradas
             clarity_match = re.search(r"CLAREZA:?\s*(\d+)", content, re.IGNORECASE)
             context_match = re.search(r"CONTEXTO:?\s*(\d+)", content, re.IGNORECASE)
-            effectiveness_match = re.search(
-                r"EFIC[AÁ]CIA:?\s*(\d+)", content, re.IGNORECASE
-            )
+            effectiveness_match = re.search(r"EFIC[AÁ]CIA:?\s*(\d+)", content, re.IGNORECASE)
+
+            logger.info(f"Matches encontrados - Clareza: {clarity_match}, Contexto: {context_match}, Eficácia: {effectiveness_match}")
 
             if not all([clarity_match, context_match, effectiveness_match]):
-                logger.error(
-                    "Não foi possível encontrar todas as pontuações na resposta"
-                )
-                logger.debug(f"Conteúdo recebido: {content}")
-                logger.debug(
-                    f"Matches: {clarity_match}, {context_match}, {effectiveness_match}"
-                )
-                return self._get_default_evaluation()
+                logger.error("Não foi possível encontrar todas as pontuações na resposta")
+                logger.info(f"Conteúdo recebido: {content[:500]}...")
+                
+                # Tenta padrões alternativos (para caso o formato seja diferente)
+                alt_clarity = re.search(r"[Cc]lareza:?\s*(\d+)[/\s]*10", content)
+                alt_context = re.search(r"[Cc]ontexto:?\s*(\d+)[/\s]*10", content)
+                alt_effectiveness = re.search(r"[Ee]fic[áa]cia:?\s*(\d+)[/\s]*10", content)
+                
+                logger.info(f"Matches alternativos - Clareza: {alt_clarity}, Contexto: {alt_context}, Eficácia: {alt_effectiveness}")
+                
+                if alt_clarity and alt_context and alt_effectiveness:
+                    clarity_match = alt_clarity
+                    context_match = alt_context
+                    effectiveness_match = alt_effectiveness
+                else:
+                    return self._get_default_evaluation()
 
+            # Extração de sugestões com padrões alternativos
             suggestions = []
-            suggestions_section = re.search(
-                r"SUGEST[ÕO]ES:?\s*((?:[-•]\s*[^\n]+\n?)+)",
-                content,
-                re.IGNORECASE | re.MULTILINE,
-            )
-            if suggestions_section:
-                suggestions = re.findall(
-                    r"[-•]\s*([^\n]+)", suggestions_section.group(1)
-                )
+            suggestions_patterns = [
+                r"SUGEST[ÕO]ES\s*(?:DE\s*MELHORIA)?:?\s*((?:[-•*]\s*[^\n]+\n?)+)",
+                r"SUGEST[ÕO]ES\s*(?:DE\s*MELHORIA)?:?\s*((?:\d+\.\s*[^\n]+\n?)+)",
+                r"SUGEST[ÕO]ES\s*(?:DE\s*MELHORIA)?:?\s*((?:[^\n]+\n?)+)",
+            ]
+            
+            for pattern in suggestions_patterns:
+                suggestions_section = re.search(pattern, content, re.IGNORECASE | re.MULTILINE)
+                if suggestions_section:
+                    logger.info(f"Seção de sugestões encontrada: {suggestions_section.group(1)[:200]}...")
+                    
+                    # Tenta diferentes formatos de itens
+                    for item_pattern in [r"[-•*]\s*([^\n]+)", r"\d+\.\s*([^\n]+)", r"[^\n]+"]:
+                        items = re.findall(item_pattern, suggestions_section.group(1))
+                        if items:
+                            suggestions = items
+                            break
+                    break
 
+            if not suggestions:
+                logger.info("Nenhuma sugestão encontrada com os padrões regulares")
+                # Tenta extrair texto entre SUGESTÕES e PROMPT OTIMIZADO
+                full_section = re.search(
+                    r"SUGEST[ÕO]ES\s*(?:DE\s*MELHORIA)?:?(.+?)(?:PROMPT\s*OTIMIZADO|$)",
+                    content, 
+                    re.IGNORECASE | re.DOTALL
+                )
+                if full_section:
+                    # Divide por linhas e filtra linhas vazias
+                    lines = [l.strip() for l in full_section.group(1).split('\n') if l.strip()]
+                    if lines:
+                        suggestions = lines
+                        logger.info(f"Encontradas {len(suggestions)} sugestões dividindo por linhas")
+
+            # Se ainda não encontrou sugestões
             if not suggestions:
                 suggestions = ["Nenhuma sugestão disponível"]
 
-            optimized_match = re.search(
+            # Melhor extração do prompt otimizado
+            optimized_patterns = [
                 r"PROMPT\s*OTIMIZADO:?\s*([^\n]+(?:\n[^\n]+)*?)(?:\n\s*VERS[ÕO]ES|$)",
-                content,
-                re.IGNORECASE | re.MULTILINE | re.DOTALL,
-            )
-            optimized_prompt = (
-                optimized_match.group(1).strip() if optimized_match else None
-            )
+                r"PROMPT\s*OTIMIZADO:?\s*(.+?)(?=\n\n|\n\s*\n|\Z)",
+                r"PROMPT\s*OTIMIZADO:?\s*(.+)",
+            ]
+            
+            optimized_prompt = None
+            for pattern in optimized_patterns:
+                optimized_match = re.search(pattern, content, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+                if optimized_match:
+                    optimized_prompt = optimized_match.group(1).strip()
+                    logger.info(f"Prompt otimizado encontrado: {optimized_prompt[:100]}...")
+                    break
+            
+            # Se não encontrou o prompt otimizado, usa o próprio conteúdo
+            if not optimized_prompt:
+                # Verifica se há algum texto após "PROMPT OTIMIZADO:"
+                simple_match = re.search(r"PROMPT\s*OTIMIZADO:?\s*(.*)", content, re.IGNORECASE)
+                if simple_match and simple_match.group(1).strip():
+                    optimized_prompt = simple_match.group(1).strip()
+                else:
+                    optimized_prompt = "Não foi possível gerar um prompt otimizado"
+                    logger.info("Não foi possível extrair o prompt otimizado")
 
-            improved_versions = []
-            versions_section = re.search(
-                r"VERS[ÕO]ES\s*MELHORADAS:?\s*((?:\d+\.\s*[^\n]+\n?)+)",
-                content,
-                re.IGNORECASE | re.MULTILINE,
-            )
-            if versions_section:
-                improved_versions = re.findall(
-                    r"\d+\.\s*([^\n]+)", versions_section.group(1)
-                )
-
+            # Pontuações e média
             clarity = int(clarity_match.group(1))
             context = int(context_match.group(1))
             effectiveness = int(effectiveness_match.group(1))
             average = (clarity + context + effectiveness) / 3
+
+            logger.info(f"Avaliação extraída com sucesso: Clareza={clarity}, Contexto={context}, Eficácia={effectiveness}")
 
             return {
                 "scores": {
@@ -230,13 +276,13 @@ class PromptEvaluator:
                     "average": round(average, 2),
                 },
                 "suggestions": suggestions,
-                "optimized_prompt": optimized_prompt
-                or "Não foi possível gerar um prompt otimizado",
-                "improved_versions": improved_versions,
+                "optimized_prompt": optimized_prompt,
+                "improved_versions": [],
             }
 
         except Exception as e:
             logger.error(f"Erro ao processar resposta do OpenAI: {str(e)}")
+            logger.info(f"Conteúdo que causou erro: {content[:200]}...")
             return self._get_default_evaluation()
 
     def _get_default_evaluation(self) -> Dict[str, Any]:

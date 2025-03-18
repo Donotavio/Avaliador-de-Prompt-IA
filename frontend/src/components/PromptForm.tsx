@@ -170,6 +170,9 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
       });
 
       const data = await response.json();
+      
+      // Log da resposta para debug
+      console.log('Resposta API completa:', data);
 
       if (!response.ok) {
         if (data.detail && data.detail.includes("temporariamente indisponível")) {
@@ -178,7 +181,13 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
         throw new Error(data.detail || 'Erro ao avaliar o prompt');
       }
 
-      setEvaluation(data.evaluation);
+      // Extrair evaluation explicitamente da resposta
+      if (data && data.evaluation) {
+        console.log('Scores recebidos:', data.evaluation.clarity_score, data.evaluation.context_score, data.evaluation.effectiveness_score);
+        setEvaluation(data.evaluation);
+      } else {
+        throw new Error('Estrutura de resposta inválida');
+      }
     } catch (error) {
       console.error('Erro:', error);
       showMessage(error instanceof Error ? error.message : 'Erro ao avaliar o prompt', 'error');
