@@ -37,6 +37,7 @@ body {
 .app-header {
   text-align: center;
   margin-bottom: 2.5rem;
+  position: relative;
 }
 
 .app-header h1 {
@@ -50,6 +51,34 @@ body {
   color: var(--text-secondary);
   font-size: 1.125rem;
   font-weight: 400;
+  margin-bottom: 1.5rem;
+}
+
+.buy-premium-button {
+  background-color: var(--accent-color);
+  color: white;
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-shadow: var(--shadow-md);
+}
+
+.buy-premium-button:hover {
+  background-color: #15803d;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+.buy-premium-button:active {
+  transform: translateY(0);
 }
 
 .app-main {

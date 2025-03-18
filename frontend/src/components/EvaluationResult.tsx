@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import '../styles/EvaluationResult.css';
 
 interface EvaluationResultProps {
@@ -22,10 +22,18 @@ interface EvaluationResultProps {
 
 const EvaluationResult: React.FC<EvaluationResultProps> = ({ result }) => {
   const [copySuccess, setCopySuccess] = useState(false);
+  const resultRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (result) {
       console.log('Dados recebidos pelo EvaluationResult:', result);
+    }
+  }, [result]);
+
+  // Scroll para o resultado quando ele for exibido
+  useEffect(() => {
+    if (result && resultRef.current) {
+      resultRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [result]);
 
@@ -102,7 +110,7 @@ const EvaluationResult: React.FC<EvaluationResultProps> = ({ result }) => {
   );
 
   return (
-    <div className="evaluation-result">
+    <div className="evaluation-result" ref={resultRef}>
       <h2>Resultado da Avaliação</h2>
       
       <div className="scores-section">
