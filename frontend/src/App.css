@@ -36,8 +36,7 @@ body {
 
 .app-header {
   text-align: center;
-  margin-bottom: 2.5rem;
-  position: relative;
+  margin: 20px 0;
 }
 
 .app-header h1 {
@@ -54,31 +53,212 @@ body {
   margin-bottom: 1.5rem;
 }
 
-.buy-premium-button {
-  background-color: var(--accent-color);
-  color: white;
-  padding: 0.6rem 1.2rem;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
+.header-actions {
+  display: flex;
   justify-content: center;
-  gap: 0.5rem;
-  box-shadow: var(--shadow-md);
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.buy-premium-button {
+  background-color: #4CAF50;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
 .buy-premium-button:hover {
-  background-color: #15803d;
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-lg);
+  background-color: #45a049;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  transform: translateY(-2px);
 }
 
 .buy-premium-button:active {
-  transform: translateY(0);
+  transform: translateY(1px);
+}
+
+.logout-button {
+  background-color: #f44336;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.logout-button:hover {
+  background-color: #d32f2f;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  transform: translateY(-2px);
+}
+
+.logout-button:active {
+  transform: translateY(1px);
+}
+
+/* Estilos para o botão de login */
+.login-button {
+  background-color: #2196F3;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.login-button:hover {
+  background-color: #0b7dda;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  transform: translateY(-2px);
+}
+
+.login-button:active {
+  transform: translateY(1px);
+}
+
+/* Estilos para o display de usuário */
+.user-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-name {
+  font-weight: bold;
+  color: #333;
+}
+
+/* Estilos para o modal de login */
+.login-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.login-modal-content {
+  background-color: white;
+  padding: 30px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 450px;
+  position: relative;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.close-button {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #999;
+}
+
+.close-button:hover {
+  color: #333;
+}
+
+.login-modal-content h2 {
+  margin-top: 0;
+  color: #333;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+  color: #555;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.error-message {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  border-left: 4px solid #c62828;
+}
+
+.form-actions {
+  margin-top: 20px;
+}
+
+.login-submit-button {
+  width: 100%;
+  padding: 12px;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.login-submit-button:hover {
+  background-color: #0b7dda;
+}
+
+.login-submit-button:disabled {
+  background-color: #bbdefb;
+  cursor: not-allowed;
+}
+
+.toggle-mode {
+  margin-top: 20px;
+  text-align: center;
+  color: #666;
+}
+
+.toggle-button {
+  background: none;
+  border: none;
+  color: #2196F3;
+  font-weight: bold;
+  cursor: pointer;
+  margin-left: 5px;
+}
+
+.toggle-button:hover {
+  text-decoration: underline;
 }
 
 .app-main {

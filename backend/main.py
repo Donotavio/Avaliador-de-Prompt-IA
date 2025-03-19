@@ -5,7 +5,10 @@ Este módulo configura e inicializa a aplicação FastAPI, definindo as rotas
 principais e middleware necessários.
 """
 
-from fastapi import FastAPI, HTTPException, Request
+# Importa o patch para OpenAI antes de qualquer outra coisa
+import openai_patch
+
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from api.prompt_evaluator import router as prompt_router
 from core.evaluator import PromptEvaluator
@@ -18,6 +21,16 @@ from schemas.prompt_schema import (
 )
 from services.usage_manager import usage_manager
 from utils.logger import logger
+
+# Importação para sistema de usuários e pagamentos
+from database import Base, engine, get_db
+from api import auth, users, payments
+from models.user import User
+from services.auth import get_current_user, get_current_admin_user
+from sqlalchemy.orm import Session
+
+# Cria tabelas no banco de dados (se não existirem)
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Avaliador de Prompts IA",
@@ -34,7 +47,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Incluindo os routers
+# Inclui rotas da API de autenticação, usuários e pagamentos
+app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(payments.router)
+
+# Inclui rotas de avaliação de prompts
 app.include_router(prompt_router)
 
 # Inicializa o avaliador
@@ -172,6 +190,73 @@ async def reset_usage(user_id: str):
     except Exception as e:
         logger.error(f"Erro ao resetar uso: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/admin/create-default-user")
+async def create_default_user(db: Session = Depends(get_db)):
+    """
+    Cria o usuário padrão (user123) se ele ainda não existir no sistema
+    Usado apenas para desenvolvimento e testes
+    """
+    try:
+        # Verifica se o usuário já existe no banco
+        default_user_id = "user123"
+        db_user = db.query(User).filter(User.id == default_user_id).first()
+        
+        if db_user:
+            return {"message": "Usuário padrão já existe", "user_id": db_user.id}
+        
+        # Cria o usuário padrão com um UUID específico
+        import uuid
+        default_user = User(
+            id=default_user_id,
+            email="default@example.com",
+            full_name="Usuário Padrão",
+            hashed_password=User.get_password_hash("password123"),
+            is_active=True
+        )
+        
+        db.add(default_user)
+        db.commit()
+        db.refresh(default_user)
+        
+        # Ativa o premium para este usuário
+        usage_manager.activate_premium(default_user_id)
+        
+        logger.info(f"Usuário padrão criado com ID: {default_user_id}")
+        return {"message": "Usuário padrão criado com sucesso", "user_id": default_user_id}
+    except Exception as e:
+        logger.error(f"Erro ao criar usuário padrão: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao criar usuário padrão: {str(e)}")
+
+
+@app.post("/admin/reset-premium-usage/{user_id}")
+async def admin_reset_premium_usage(user_id: str):
+    """
+    Reseta completamente o uso premium de um usuário, incluindo o contador de ativações
+    Endpoint administrativo para resolver problemas e testes
+    """
+    try:
+        logger.info(f"[ADMIN] Resetando completamente uso premium do usuário: {user_id}")
+        
+        # Obtém o usuário do gerenciador
+        if user_id in usage_manager.user_usage:
+            # Reseta todos os contadores relevantes
+            usage_manager.user_usage[user_id].premium_evaluations_count = 0
+            usage_manager.user_usage[user_id].premium_activations_count = 0
+            usage_manager.user_usage[user_id].is_premium_active = False
+            
+            # Salva as alterações
+            usage_manager._save_data()
+            logger.info(f"[ADMIN] Uso premium completamente resetado para usuário {user_id}")
+            return {"message": "Uso premium completamente resetado com sucesso"}
+        else:
+            logger.warning(f"[ADMIN] Usuário {user_id} não encontrado para reset")
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    except Exception as e:
+        logger.error(f"[ADMIN] Erro ao resetar uso premium: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao resetar uso premium: {str(e)}")
 
 
 if __name__ == "__main__":

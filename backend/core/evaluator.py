@@ -5,6 +5,9 @@ Este módulo contém a lógica principal para avaliar e otimizar prompts
 de acordo com critérios predefinidos.
 """
 
+# Importa o patch para OpenAI antes de qualquer outra coisa
+import openai_patch
+
 import os
 import re
 import asyncio
@@ -51,22 +54,32 @@ class PromptEvaluator:
                 api_key = os.getenv("OPENAI_API_KEY")
 
             if not api_key:
-                logger.error("Chave API não encontrada no ambiente")
-                raise ValueError("Chave API não encontrada")
+                raise ValueError(f"Chave API OpenAI para o plano {plan_type} não encontrada")
 
-            if not api_key.startswith("sk-"):
-                logger.error("Formato inválido da chave API")
-                raise ValueError("Formato inválido da chave API")
+            # Seleciona o ID do assistant correto
+            self.assistant_id = os.getenv("OPENAI_ASSISTANT_ID_FREE")
+            if plan_type == "premium":
+                self.assistant_id = os.getenv("OPENAI_ASSISTANT_ID_PREMIUM")
 
-            logger.info(f"Inicializando cliente OpenAI para plano: {plan_type}")
-
-            client = OpenAI(api_key=api_key)
-
-            self.assistant_id = ASSISTANTS[plan_type]["id"]
             if not self.assistant_id:
-                raise ValueError(f"ID do Assistant {plan_type} não encontrado")
-            logger.info(f"Assistant ID configurado: {self.assistant_id}")
+                raise ValueError(f"ID do assistant para o plano {plan_type} não encontrado")
 
+            logger.info(f"Usando assistant id: {self.assistant_id}")
+            
+            # Inicializa o cliente com a chave API
+            # Versão 1.13 da OpenAI não usa mais default_headers desta forma
+            client = OpenAI(api_key=api_key)
+            
+            # Verifica se o cliente foi inicializado corretamente
+            if not client:
+                logger.error("Falha ao inicializar cliente OpenAI")
+                raise ValueError("Falha ao inicializar cliente OpenAI")
+                
+            logger.info("Cliente OpenAI inicializado com sucesso")
+            
+            # Não tentamos mais acessar _default_headers diretamente
+            logger.info(f"Cliente OpenAI: {client}")
+            
             return client
 
         except Exception as e:
@@ -87,8 +100,38 @@ class PromptEvaluator:
             dict: Resultado da avaliação
         """
         try:
-            logger.info("Iniciando thread de avaliação com Assistant")
-            thread = self.openai_client.beta.threads.create()
+            import requests
+            import os
+            
+            # Configurações da API
+            api_key = os.getenv("OPENAI_API_KEY_FREE")
+            if hasattr(prompt, 'plan_type') and getattr(prompt, 'plan_type', None) == "premium":
+                api_key = os.getenv("OPENAI_API_KEY")
+            
+            # Base URL e headers
+            base_url = "https://api.openai.com/v1"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "OpenAI-Beta": "assistants=v2"
+            }
+            
+            logger.info("Iniciando thread de avaliação com Assistant usando requisições diretas")
+            
+            # Criar uma thread
+            response = requests.post(
+                f"{base_url}/threads",
+                headers=headers,
+                json={}
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"Erro ao criar thread: {response.status_code} - {response.text}")
+                raise ValueError(f"Erro ao criar thread: {response.status_code}")
+                
+            thread_data = response.json()
+            thread_id = thread_data["id"]
+            logger.info(f"Thread criada com ID: {thread_id}")
             
             # Formata a mensagem com prompt e contexto
             target_llm = getattr(prompt, 'target_llm', None) if hasattr(prompt, 'target_llm') else None
@@ -99,52 +142,103 @@ class PromptEvaluator:
             if prompt_context:
                 message_content += f"\n\nContexto adicional: {prompt_context}"
             
+            # Adiciona uma mensagem à thread
             logger.info("Adicionando mensagem à thread")
-            message = self.openai_client.beta.threads.messages.create(
-                thread_id=thread.id,
-                role="user",
-                content=message_content
+            response = requests.post(
+                f"{base_url}/threads/{thread_id}/messages",
+                headers=headers,
+                json={
+                    "role": "user",
+                    "content": message_content
+                }
             )
             
-            # Inicia a execução
+            if response.status_code != 200:
+                logger.error(f"Erro ao adicionar mensagem: {response.status_code} - {response.text}")
+                raise ValueError(f"Erro ao adicionar mensagem: {response.status_code}")
+                
+            message_data = response.json()
+            message_id = message_data["id"]
+            logger.info(f"Mensagem adicionada: {message_id}")
+            
+            # Inicia a execução com o assistant
             logger.info(f"Executando o assistant {self.assistant_id}")
-            run = self.openai_client.beta.threads.runs.create(
-                thread_id=thread.id,
-                assistant_id=self.assistant_id
+            response = requests.post(
+                f"{base_url}/threads/{thread_id}/runs",
+                headers=headers,
+                json={
+                    "assistant_id": self.assistant_id
+                }
             )
+            
+            if response.status_code != 200:
+                logger.error(f"Erro ao executar assistant: {response.status_code} - {response.text}")
+                raise ValueError(f"Erro ao executar assistant: {response.status_code}")
+                
+            run_data = response.json()
+            run_id = run_data["id"]
+            run_status = run_data["status"]
+            logger.info(f"Execução iniciada com ID: {run_id}, status inicial: {run_status}")
             
             # Monitora a execução
-            while run.status not in ["completed", "failed", "cancelled", "expired"]:
-                logger.info(f"Verificando status: {run.status}")
-                await asyncio.sleep(0.5)
-                run = self.openai_client.beta.threads.runs.retrieve(
-                    thread_id=thread.id,
-                    run_id=run.id
+            import time
+            while run_status not in ["completed", "failed", "cancelled", "expired"]:
+                logger.info(f"Verificando status: {run_status}")
+                # Usar sleep em vez de asyncio.sleep para simplificar
+                time.sleep(0.5)
+                
+                response = requests.get(
+                    f"{base_url}/threads/{thread_id}/runs/{run_id}",
+                    headers=headers
                 )
+                
+                if response.status_code != 200:
+                    logger.error(f"Erro ao verificar status: {response.status_code} - {response.text}")
+                    raise ValueError(f"Erro ao verificar status: {response.status_code}")
+                    
+                run_data = response.json()
+                run_status = run_data["status"]
             
             # Verifica se houve falha na execução
-            if run.status != "completed":
-                logger.error(f"Execução falhou com status: {run.status}")
-                raise ValueError(f"Falha na execução do assistant: {run.status}")
+            if run_status != "completed":
+                logger.error(f"Execução falhou com status: {run_status}")
+                raise ValueError(f"Falha na execução do assistant: {run_status}")
                 
             # Obtém as mensagens
             logger.info("Recuperando mensagem de resposta")
-            messages = self.openai_client.beta.threads.messages.list(
-                thread_id=thread.id
+            response = requests.get(
+                f"{base_url}/threads/{thread_id}/messages",
+                headers=headers
             )
+            
+            if response.status_code != 200:
+                logger.error(f"Erro ao obter mensagens: {response.status_code} - {response.text}")
+                raise ValueError(f"Erro ao obter mensagens: {response.status_code}")
+                
+            messages_data = response.json()
             
             # Filtra a última mensagem do assistente
             assistant_message = None
-            for message in messages.data:
-                if message.role == "assistant":
+            for message in messages_data["data"]:
+                if message["role"] == "assistant":
                     assistant_message = message
                     break
                     
             if not assistant_message:
                 logger.error("Mensagem do assistente não encontrada")
                 raise ValueError("Mensagem do assistente não encontrada")
+            
+            # Extrai o conteúdo do texto
+            content = None
+            for content_item in assistant_message["content"]:
+                if content_item["type"] == "text":
+                    content = content_item["text"]["value"]
+                    break
+            
+            if not content:
+                logger.error("Conteúdo da mensagem não encontrado")
+                raise ValueError("Conteúdo da mensagem não encontrado")
                 
-            content = assistant_message.content[0].text.value
             return self._parse_openai_response(content)
             
         except Exception as e:
