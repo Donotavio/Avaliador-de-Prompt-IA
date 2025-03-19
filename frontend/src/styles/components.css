@@ -902,13 +902,20 @@ select.form-control {
 }
 
 .premium-badge svg {
-  color: var(--primary-600);
+  color: var(--primary-700);
+  stroke-width: 2px;
+  fill: none;
+  stroke: currentColor;
 }
 
 .free-badge {
   background-color: var(--neutral-100);
   color: var(--neutral-700);
   border: 1px solid var(--neutral-300);
+}
+
+.free-badge svg {
+  color: var(--neutral-600);
 }
 
 /* Ajustes nos componentes de usuário */
@@ -920,6 +927,21 @@ select.form-control {
 
 .user-icon {
   margin-right: var(--space-1);
+}
+
+/* Indicador Beta */
+.beta-badge {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background-color: var(--primary-500);
+  color: white;
+  padding: 0.1rem 0.3rem;
+  border-radius: var(--radius-sm);
+  margin-left: var(--space-2);
+  position: relative;
+  top: -0.5rem;
+  letter-spacing: 0.05em;
 }
 
 /* Contador de avaliações */

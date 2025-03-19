@@ -7,18 +7,30 @@ import { InfoIcon, UserIcon, LogoutIcon, LoginIcon } from './components/Icons';
 
 // Ícone de prompt para o logo
 const PromptIcon = () => (
-  <svg className="logo-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-    <path d="M13 8l2 2-2 2"></path>
-    <path d="M9 12h4"></path>
+  <svg className="logo-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    {/* Balão de conversa */}
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    
+    {/* Cérebro dentro do balão */}
+    <path d="M14 8.5c0-.83-.67-1.5-1.5-1.5h-2c-.83 0-1.5.67-1.5 1.5M9 12.5c0 .83.67 1.5 1.5 1.5h2c.83 0 1.5-.67 1.5-1.5" />
+    <path d="M9 8.5v4M14 8.5v4" />
+    <path d="M11.5 7v7" />
+    <path d="M9 10h5" />
   </svg>
 );
 
 // Ícone de coroa para usuários premium
 const CrownIcon = ({ size = 16 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M3 17L6 9L9 15L12 8L15 14L18 9L21 17L19 18H5L3 17Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M3 21H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+  </svg>
+);
+
+// Ícone para usuários free
+const TagIcon = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+    <line x1="7" y1="7" x2="7.01" y2="7"></line>
   </svg>
 );
 
@@ -36,6 +48,7 @@ const UserDisplay: React.FC<{ userName: string; isPremium: boolean; onLogout: ()
         )}
         {!isPremium && (
           <span className="free-badge" title="Usuário Free">
+            <TagIcon size={16} />
             Free
           </span>
         )}
@@ -417,7 +430,8 @@ const App: React.FC = () => {
               <div className="logo">
                 <a href="/">
                   <PromptIcon />
-                  Avaliador de Prompts
+                  Avaliador de Prompt IA
+                  <span className="beta-badge">Beta</span>
                 </a>
               </div>
               <div className="user-actions">
