@@ -282,22 +282,17 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
   const handleReset = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     
-    try {
-      const response = await fetch(`/reset/${userId}`, {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        throw new Error('Falha ao resetar uso');
-      }
-      const data = await response.json();
-      logger.info('Uso resetado');
-      showMessage(data.message, 'success');
-      await checkPremiumStatus();
-      await checkFreeStatus();
-    } catch (error) {
-      logger.error('Erro ao resetar uso');
-      showMessage('Não foi possível resetar o uso', 'error');
-    }
+    // Limpar os campos do formulário
+    setPrompt('');
+    setContext('');
+    setModel('');
+    setResult(null);
+    
+    // Mostrar mensagem de sucesso para limpeza de campos
+    showMessage('Formulário limpo com sucesso', 'success');
+    
+    // Não vamos mais tentar resetar o contador no backend
+    // Esta função agora só limpa os campos do formulário
   };
 
   // Função para abrir o modal premium
@@ -347,6 +342,9 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
               placeholder="Digite seu prompt aqui..."
               className="form-control"
             />
+            <div className="form-helper">
+              Digite o prompt que deseja avaliar. Quanto mais detalhado, melhor será a análise.
+            </div>
           </div>
           
           <div className="form-group">
@@ -368,6 +366,9 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
               <option value="gemini-ultra">Gemini Ultra</option>
               <option value="llama-3-70b">Llama 3 70B</option>
             </select>
+            <div className="form-helper">
+              Escolha o modelo de IA para o qual o prompt está sendo escrito. A avaliação será adaptada às capacidades específicas deste modelo.
+            </div>
           </div>
           
           <div className="form-group">
@@ -379,6 +380,9 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
               placeholder="Adicione contexto adicional para melhor avaliação..."
               className="form-control"
             />
+            <div className="form-helper">
+              Informações adicionais sobre o objetivo do prompt ou situação onde será usado. Ajuda a fornecer uma avaliação mais precisa.
+            </div>
           </div>
           
           {error && error.trim() !== "" && (

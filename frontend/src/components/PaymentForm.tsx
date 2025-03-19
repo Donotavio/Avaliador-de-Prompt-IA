@@ -544,6 +544,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, onError }
                 className="form-control"
                 required
               />
+              <div className="form-helper">
+                Documento necessário para emissão de nota fiscal e identificação do pagamento.
+              </div>
             </div>
             
             <div className="form-group">
@@ -558,6 +561,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, onError }
                 className="form-control"
                 required
               />
+              <div className="form-helper">
+                Usado para contato e suporte relacionado à sua assinatura.
+              </div>
             </div>
           </div>
 
@@ -576,6 +582,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, onError }
                 className="form-control"
                 required
               />
+              <div className="form-helper">
+                Endereço completo para registro da assinatura.
+              </div>
             </div>
           </div>
           
@@ -592,6 +601,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, onError }
                 className="form-control"
                 required
               />
+              <div className="form-helper">
+                Número do endereço.
+              </div>
             </div>
             
             <div className="form-group">
@@ -605,6 +617,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, onError }
                 placeholder="Apto, Bloco, etc."
                 className="form-control"
               />
+              <div className="form-helper">
+                Informações adicionais como apartamento, bloco ou ponto de referência.
+              </div>
             </div>
           </div>
           
@@ -621,6 +636,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, onError }
                 className="form-control"
                 required
               />
+              <div className="form-helper">
+                Bairro do endereço para registro.
+              </div>
             </div>
           </div>
           
@@ -637,6 +655,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, onError }
                 className="form-control"
                 required
               />
+              <div className="form-helper">
+                Cidade onde o endereço está localizado.
+              </div>
             </div>
             
             <div className="form-group">
@@ -651,6 +672,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, onError }
                 className="form-control"
                 required
               />
+              <div className="form-helper">
+                Estado (UF) onde o endereço está localizado.
+              </div>
             </div>
           </div>
           
@@ -667,6 +691,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, onError }
                 className="form-control"
                 required
               />
+              <div className="form-helper">
+                Código postal do endereço para validação e registro.
+              </div>
             </div>
           </div>
 
