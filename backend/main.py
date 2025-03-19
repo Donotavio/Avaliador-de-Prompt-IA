@@ -28,6 +28,8 @@ from api import auth, users, payments, products
 from models.user import User
 from services.auth import get_current_user, get_current_admin_user
 from sqlalchemy.orm import Session
+from typing import Optional
+from fastapi.security import OAuth2PasswordBearer
 
 # Constantes para configuração da API
 API_PREFIX = "/api"
@@ -66,6 +68,27 @@ app.include_router(prompt_router, prefix=API_PREFIX)
 # Inicializa o avaliador
 evaluator = PromptEvaluator()
 
+# OAuth2 schema opcional que não levanta exceção se não houver token
+oauth2_scheme_optional = OAuth2PasswordBearer(
+    tokenUrl=f"{API_PREFIX}/auth/login",
+    auto_error=False
+)
+
+# Função para obter o usuário atual (opcional)
+def get_current_user_optional(
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme_optional)
+) -> Optional[User]:
+    """
+    Obtém o usuário atual se autenticado, ou None se não autenticado.
+    """
+    if not token:
+        return None
+    
+    try:
+        return get_current_user(db=db, token=token)
+    except:
+        return None
 
 @app.get("/")
 async def root():
@@ -115,24 +138,42 @@ async def evaluate_prompt(request: PromptRequest):
         logger.error(f"Erro interno: {str(e)}")
         raise HTTPException(status_code=500, detail="Erro interno ao avaliar prompt")
 
-
 @app.get("/premium/status/{user_id}")
 async def check_premium_status(
     user_id: str,
-    current_user: User = Depends(get_current_user)
+    request: Request,
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Verifica o status do plano premium de um usuário.
-    Requer autenticação de usuário.
+    Permite acesso anônimo para o ID 'anon'.
 
     Args:
         user_id: ID do usuário
-        current_user: Usuário autenticado
+        request: Requisição HTTP
+        current_user: Usuário autenticado (opcional)
 
     Returns:
         dict: Status do plano premium
     """
-    # Garantir que o usuário só pode verificar seu próprio status
+    # Para usuários anônimos, permitir apenas verificar 'anon'
+    if user_id == "anon":
+        # Para anônimos, sempre retorna que não tem premium, mas pode assinar
+        logger.info("Verificando status premium para usuário anônimo")
+        return {
+            "can_use": False, 
+            "message": "Usuário não autenticado", 
+            "has_expired": False
+        }
+    
+    # Para usuários autenticados, verificar permissões
+    if not current_user:
+        raise HTTPException(
+            status_code=401,
+            detail="Autenticação necessária para verificar status premium de usuário específico"
+        )
+        
+    # Garantir que o usuário só pode verificar seu próprio status (ou é admin)
     if current_user.id != user_id and not current_user.is_admin:
         raise HTTPException(
             status_code=403, 
@@ -152,20 +193,46 @@ async def check_premium_status(
 @app.get("/free/status/{user_id}")
 async def check_free_status(
     user_id: str,
-    current_user: User = Depends(get_current_user)
+    request: Request,
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Verifica o status do plano gratuito de um usuário.
-    Requer autenticação de usuário.
+    Permite acesso anônimo para o ID 'anon'.
 
     Args:
         user_id: ID do usuário
-        current_user: Usuário autenticado
+        request: Requisição HTTP
+        current_user: Usuário autenticado (opcional)
 
     Returns:
         dict: Status do plano gratuito
     """
-    # Garantir que o usuário só pode verificar seu próprio status
+    # Para usuários anônimos, permitir apenas verificar 'anon'
+    if user_id == "anon":
+        # Para usuários anônimos, verificamos pelo IP
+        client_ip = request.client.host
+        anon_id = f"anon_{client_ip}"
+        logger.info(f"Verificando status gratuito para usuário anônimo: {anon_id}")
+        
+        can_use_free, message = usage_manager.can_use_free(anon_id)
+        logger.info(f"Status gratuito anônimo: {can_use_free}, Mensagem: {message}")
+        
+        # Se for o primeiro uso, retornar sempre true
+        if not can_use_free and "já utilizou" in message:
+            message = "Primeira avaliação gratuita"
+            can_use_free = True
+            
+        return {"can_use_free": can_use_free, "message": message}
+    
+    # Para usuários autenticados, verificar permissões
+    if not current_user:
+        raise HTTPException(
+            status_code=401,
+            detail="Autenticação necessária para verificar status de usuário específico"
+        )
+        
+    # Garantir que o usuário só pode verificar seu próprio status (ou é admin)
     if current_user.id != user_id and not current_user.is_admin:
         raise HTTPException(
             status_code=403, 

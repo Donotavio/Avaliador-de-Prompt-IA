@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import PromptForm from './components/PromptForm';
 import PremiumModal from './components/PremiumModal';
+import PaymentSuccessPage from './components/PaymentSuccessPage';
 import './App.css';
 
 // Componente para exibir informações do usuário logado
@@ -51,9 +53,11 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
     try {
       if (isLogin) {
         // Login
-        const response = await fetch('/auth/login', {
+        const response = await fetch('/api/auth/login', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
           body: new URLSearchParams({
             'username': formData.email,
             'password': formData.password,
@@ -90,7 +94,7 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
         }
 
         // Registrar
-        const registerResponse = await fetch('/auth/register', {
+        const registerResponse = await fetch('/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -106,7 +110,7 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
         }
 
         // Login automático após registro
-        const loginResponse = await fetch('/auth/login', {
+        const loginResponse = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({
@@ -223,13 +227,15 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
   );
 };
 
+// Componente principal da aplicação
 const App: React.FC = () => {
-  // Estado para gerenciar o ID do usuário
-  const [userId, setUserId] = useState<string | null>(null);
-  const [userName, setUserName] = useState<string>('');
-  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  
+  const [userId, setUserId] = useState<string>("anon");
+  const [userName, setUserName] = useState<string>("");
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState<boolean>(false);
+
   // Verifica se há um usuário logado no localStorage
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -238,6 +244,8 @@ const App: React.FC = () => {
         const userObj = JSON.parse(storedUser);
         setUserId(userObj.id);
         setUserName(userObj.fullName || userObj.email);
+        setIsLoggedIn(true);
+        setIsAdmin(userObj.id === 'admin');
       } catch (e) {
         console.error('Erro ao parsear dados do usuário:', e);
         // Em caso de erro, limpa o localStorage para evitar problemas
@@ -251,15 +259,12 @@ const App: React.FC = () => {
   const handleLogout = () => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
-    setUserId(null);
-    setUserName('');
+    setUserId("anon");
+    setUserName("");
+    setIsLoggedIn(false);
+    setIsAdmin(false);
     // Opcional: recarregar a página para garantir um estado limpo
     window.location.reload();
-  };
-
-  // Função para abrir o modal de login
-  const handleLoginClick = () => {
-    setIsLoginModalOpen(true);
   };
 
   // Função chamada após login bem-sucedido
@@ -269,46 +274,55 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>Avaliador de Prompts IA</h1>
-        <p>Otimize seus prompts para resultados melhores com qualquer LLM</p>
-        <div className="header-actions">
-          <button 
-            className="buy-premium-button" 
-            onClick={() => setIsPremiumModalOpen(true)}
-          >
-            Comprar Premium
-          </button>
-          
-          {userId ? (
-            <UserDisplay userName={userName} onLogout={handleLogout} />
-          ) : (
-            <LoginButton onClick={handleLoginClick} />
-          )}
-        </div>
-      </header>
-      <main className="app-main">
-        <PromptForm userId={userId || "anon"} />
-      </main>
-      <footer className="app-footer">
-        <p>&copy; {new Date().getFullYear()} Avaliador de Prompts IA. Todos os direitos reservados.</p>
-      </footer>
+    <Router>
+      <div className="app">
+        <header className="app-header">
+          <div className="logo">
+            <a href="/">
+              <h1>Avaliador de Prompts <span className="logo-ai">AI</span></h1>
+            </a>
+          </div>
+          <div className="user-actions">
+            {isLoggedIn ? (
+              <UserDisplay userName={userName} onLogout={handleLogout} />
+            ) : (
+              <LoginButton onClick={() => setShowLoginModal(true)} />
+            )}
+          </div>
+        </header>
 
-      {isPremiumModalOpen && (
-        <PremiumModal 
-          onClose={() => setIsPremiumModalOpen(false)}
-          refreshPage={true}
-        />
-      )}
+        <main className="app-main">
+          <Routes>
+            <Route path="/" element={
+              <PromptForm 
+                userId={userId} 
+                isAdmin={isAdmin} 
+                openPremiumModal={() => setIsPremiumModalOpen(true)} 
+              />
+            } />
+            <Route path="/payment-success" element={
+              <PaymentSuccessPage userId={userId} />
+            } />
+            {/* Rota fallback para páginas não encontradas */}
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </main>
 
-      {isLoginModalOpen && (
-        <LoginModal 
-          onClose={() => setIsLoginModalOpen(false)}
-          onLoginSuccess={handleLoginSuccess}
-        />
-      )}
-    </div>
+        {showLoginModal && (
+          <LoginModal 
+            onClose={() => setShowLoginModal(false)} 
+            onLoginSuccess={handleLoginSuccess} 
+          />
+        )}
+
+        {isPremiumModalOpen && (
+          <PremiumModal 
+            onClose={() => setIsPremiumModalOpen(false)} 
+            refreshPage={true}
+          />
+        )}
+      </div>
+    </Router>
   );
 };
 

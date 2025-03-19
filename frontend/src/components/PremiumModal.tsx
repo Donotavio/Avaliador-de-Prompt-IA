@@ -86,7 +86,7 @@ const PremiumModal: React.FC<PremiumModalProps> = ({ onClose, refreshPage = fals
 
     try {
       // Registrar o usuário
-      const registerResponse = await fetch('/auth/register', {
+      const registerResponse = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -106,8 +106,8 @@ const PremiumModal: React.FC<PremiumModalProps> = ({ onClose, refreshPage = fals
       const userData = await registerResponse.json();
       console.log("Usuário registrado com sucesso:", userData);
 
-      // Login automático após registro
-      const loginResponse = await fetch('/auth/login', {
+      // Login automático
+      const loginResponse = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',

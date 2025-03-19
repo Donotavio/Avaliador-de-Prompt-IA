@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import PaymentResult from './PaymentResult';
 import './PaymentForm.css';
 
 interface PaymentFormProps {
@@ -32,10 +31,6 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
     postalCode: '',
     paymentMethod: 'PIX' // Valor padrão
   });
-  
-  // Estado para controlar a exibição do resultado do pagamento
-  const [showPaymentResult, setShowPaymentResult] = useState(false);
-  const [paymentUrl, setPaymentUrl] = useState('');
   
   const paymentMethods = [
     { id: 'PIX', name: 'PIX' },
@@ -256,16 +251,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
       
       // Verifica se recebemos a URL de checkout
       if (data.checkout_url) {
-        // Armazena a URL para uso posterior
-        setPaymentUrl(data.checkout_url);
-        
-        // Para cartão de crédito, redirecionamos direto para o checkout
-        if (formData.paymentMethod === 'CREDIT_CARD') {
-          onSuccess(data.checkout_url);
-        } else {
-          // Para outros métodos, mostramos a tela de detalhes do pagamento
-          setShowPaymentResult(true);
-        }
+        // Redireciona diretamente para a URL de checkout, independente do método de pagamento
+        onSuccess(data.checkout_url);
       } else {
         throw new Error('URL de pagamento não encontrada na resposta');
       }
@@ -276,17 +263,6 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
       setIsLoading(false);
     }
   };
-
-  // Se estiver mostrando o resultado do pagamento, renderizar o PaymentResult
-  if (showPaymentResult) {
-    return (
-      <PaymentResult 
-        checkoutUrl={paymentUrl} 
-        paymentMethod={formData.paymentMethod} 
-        onClose={onClose} 
-      />
-    );
-  }
 
   return (
     <div className="payment-form-container">

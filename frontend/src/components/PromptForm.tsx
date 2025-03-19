@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { logger } from '../utils/logger';
 import PremiumModal from './PremiumModal';
 import EvaluationResult from './EvaluationResult';
+import '../App.css';
+import '../styles/PromptForm.css';
 
 // Ícones SVG inline
 const SparkleIcon = () => (
@@ -34,6 +36,8 @@ const AlertIcon = () => (
 
 interface PromptFormProps {
   userId: string;
+  isAdmin?: boolean;
+  openPremiumModal?: () => void;
 }
 
 interface PromptEvaluation {
@@ -44,7 +48,7 @@ interface PromptEvaluation {
   optimized_prompt: string;
 }
 
-const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
+const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, openPremiumModal }) => {
   const [prompt, setPrompt] = useState('');
   const [context, setContext] = useState('');
   const [targetLLM, setTargetLLM] = useState('');
@@ -57,7 +61,6 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
   const [freeMessage, setFreeMessage] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [hasPremiumExpired, setHasPremiumExpired] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -83,7 +86,6 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
         
         if (response.ok) {
           const userData = await response.json();
-          setIsAdmin(userData.is_admin === true);
         }
       } catch (error) {
         console.error('Erro ao verificar permissões:', error);
@@ -105,54 +107,60 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
   const checkPremiumStatus = async () => {
     try {
       const token = localStorage.getItem('token');
-      if (!token) {
-        setCanUsePremium(false);
-        setPremiumMessage('Login necessário para acesso premium');
-        return;
-      }
+      const actualUserId = userId || 'anon';
       
-      const response = await fetch(`/premium/status/${userId}`, {
-        headers: {
+      const response = await fetch(`/premium/status/${actualUserId}`, {
+        headers: token ? {
           'Authorization': `Bearer ${token}`
-        }
+        } : {}
       });
       
       if (!response.ok) {
-        throw new Error('Erro ao verificar status premium');
+        // Se o erro for 401 ou 403, definimos valores padrão para usuários não autenticados
+        if (response.status === 401 || response.status === 403) {
+          setCanUsePremium(false);
+          setHasPremiumExpired(false);
+          setPremiumMessage('Login necessário para acesso premium');
+          return;
+        }
+        throw new Error('Falha ao verificar status premium');
       }
       
       const data = await response.json();
       setCanUsePremium(data.can_use);
       setPremiumMessage(data.message);
-      setHasPremiumExpired(data.has_expired);
+      setHasPremiumExpired(data.has_expired || false);
       
       if (data.has_expired && data.message.includes('Limite de ativações premium atingido')) {
         setIsModalOpen(true);
       }
     } catch (error) {
       console.error('Erro ao verificar status premium:', error);
-      setPremiumMessage('Não foi possível verificar o status premium');
+      // Por padrão, define que não pode usar premium
       setCanUsePremium(false);
-      showMessage('Erro ao verificar status premium', 'error');
+      setHasPremiumExpired(false);
+      setPremiumMessage('Não foi possível verificar o status premium');
     }
   };
 
   const checkFreeStatus = async () => {
     try {
       const token = localStorage.getItem('token');
-      if (!token) {
-        setCanUseFree(false);
-        setFreeMessage('Login necessário para usar o sistema');
-        return;
-      }
+      const actualUserId = userId || 'anon';
       
-      const response = await fetch(`/free/status/${userId}`, {
-        headers: {
+      const response = await fetch(`/free/status/${actualUserId}`, {
+        headers: token ? {
           'Authorization': `Bearer ${token}`
-        }
+        } : {}
       });
       
       if (!response.ok) {
+        // Se o erro for 401 ou 403, definimos valores padrão para usuários não autenticados
+        if (response.status === 401 || response.status === 403) {
+          setCanUseFree(true);
+          setFreeMessage('Primeira avaliação gratuita');
+          return;
+        }
         throw new Error('Falha ao verificar status gratuito');
       }
       
@@ -160,37 +168,10 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
       setCanUseFree(data.can_use_free);
       setFreeMessage(data.message);
     } catch (error) {
-      logger.error('Erro ao verificar status gratuito');
-      showMessage('Não foi possível verificar o status gratuito', 'error');
-    }
-  };
-
-  const activatePremium = async () => {
-    if (hasPremiumExpired) {
-      setIsModalOpen(true);
-      return;
-    }
-
-    try {
-      const response = await fetch(`/premium/activate/${userId}`, {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        const data = await response.json();
-        if (data.detail === 'premium_expired') {
-          setHasPremiumExpired(true);
-          setIsModalOpen(true);
-          return;
-        }
-        throw new Error('Falha ao ativar plano premium');
-      }
-      const data = await response.json();
-      logger.info('Plano premium ativado');
-      showMessage(data.message, 'success');
-      await checkPremiumStatus();
-    } catch (error) {
-      logger.error('Erro ao ativar plano premium');
-      showMessage('Não foi possível ativar o plano premium', 'error');
+      console.error('Erro ao verificar status gratuito:', error);
+      // Em caso de erro, definimos valores padrão permissivos
+      setCanUseFree(true);
+      setFreeMessage('Primeira avaliação gratuita');
     }
   };
 
@@ -347,15 +328,15 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
               {isLoading ? <><div className="spinner"></div>Avaliando...</> : <><SendIcon />Avaliar Prompt</>}
             </button>
             
-            {hasPremiumExpired && (
+            {(!canUsePremium || hasPremiumExpired) && (
               <button
                 type="button"
                 className="premium-button"
-                onClick={() => setIsModalOpen(true)}
+                onClick={openPremiumModal || (() => setIsModalOpen(true))}
                 disabled={isLoading}
               >
                 <SparkleIcon />
-                Assinar Premium
+                {hasPremiumExpired ? 'Renovar Premium' : 'Comprar Premium'}
               </button>
             )}
             

@@ -15,6 +15,7 @@ class Subscription(Base):
     plan_type = Column(String(50), nullable=False, default="premium")
     amount = Column(Float, nullable=False)
     currency = Column(String(3), default="BRL")
+    payment_method = Column(String(50), nullable=True)  # PIX, CREDIT_CARD, BOLETO
     abacate_payment_id = Column(String(255), nullable=True)
     abacate_customer_id = Column(String(255), nullable=True)
     start_date = Column(DateTime(timezone=True), nullable=True)

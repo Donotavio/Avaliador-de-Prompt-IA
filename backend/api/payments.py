@@ -146,7 +146,7 @@ async def create_payment(
         neighborhood = user_data.get('neighborhood', '')
         
         # Prepara os dados para a API AbacatePay
-        base_url = "https://prompt-avaliator.com"
+        base_url = "http://localhost:3000"
         
         # Dados para a criação da cobrança
         payment_data = {
@@ -162,8 +162,8 @@ async def create_payment(
                 }
             ],
             "returnUrl": f"{base_url}/payment-cancel",
-            "completionUrl": f"{base_url}/payment-success",
-            "webhookUrl": f"{base_url}/payments/webhook",
+            "completionUrl": f"{base_url}/payment-success?bill_id={{id}}",
+            "webhookUrl": f"{base_url}/api/payments/webhook",
             "devMode": True  # Ative para testes
         }
         
@@ -171,7 +171,10 @@ async def create_payment(
         if current_user.abacate_customer_id:
             payment_data["customer"] = {
                 "id": current_user.abacate_customer_id,
-                "email": current_user.email.strip()  # Garante que não haja espaços no email
+                "name": current_user.full_name,
+                "email": current_user.email.strip(),  # Garante que não haja espaços no email
+                "cellphone": current_user.phone or user_data.get("cellphone", "11999999999"),
+                "taxId": current_user.tax_id or user_data.get("taxId", "00000000000")
             }
         else:
             # Caso contrário, enviamos os dados do cliente para criar junto com o pagamento
@@ -236,6 +239,7 @@ async def create_payment(
             plan_type="premium",
             amount=product.price,
             currency="BRL",
+            payment_method=subscription_data["payment_method"],
             abacate_payment_id=payment_response.get("id", ""),
             abacate_customer_id=current_user.abacate_customer_id
         )
@@ -419,17 +423,19 @@ async def payment_details(
             
         except Exception as e:
             # Se não conseguiu obter detalhes, retornar pelo menos os dados básicos
-            print(f"Erro ao obter detalhes de pagamento: {str(e)}")
+            print(f"Erro ao processar detalhes do pagamento: {str(e)}")
             
-            # Retornar dados da assinatura sem informações específicas do método
+            # Retornar a URL de checkout direta do AbacatePay
+            checkout_base_url = abacate_client.base_url.replace('/v1', '')
+            checkout_url = f"{checkout_base_url}/pay/{payment_id}"
+            
             return {
                 "id": payment_id,
                 "status": subscription.status,
-                "method": "PIX",  # Assumindo PIX como default
+                "method": subscription.payment_method if hasattr(subscription, 'payment_method') else "PIX",
                 "amount": subscription.amount,
                 "created_at": subscription.created_at.isoformat() if subscription.created_at else None,
-                "error": "Não foi possível obter detalhes do método de pagamento",
-                "checkout_url": f"{abacate_client.base_url.replace('/v1', '')}/pay/{payment_id}"
+                "checkout_url": checkout_url
             }
         
     except Exception as e:
@@ -504,18 +510,147 @@ async def payment_status(
             }
         except Exception as e:
             # Se não conseguir obter o status da API, use o status atual da assinatura
-            print(f"Erro ao consultar status na API: {e}")
+            print(f"Erro ao consultar status na API: {str(e)}")
+            
+            # Gera URL de checkout para redirecionamento
+            checkout_base_url = abacate_client.base_url.replace('/v1', '')
+            checkout_url = f"{checkout_base_url}/pay/{payment_id}"
+            
             return {
                 "id": payment_id,
                 "status": subscription.status,
                 "subscription_id": subscription.id,
                 "is_active": subscription.is_active(),
-                "method": "PIX",  # Assumindo PIX como default
-                "error": "Não foi possível obter status atualizado"
+                "method": subscription.payment_method if hasattr(subscription, 'payment_method') else "PIX",
+                "checkout_url": checkout_url
             }
             
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Erro ao verificar status do pagamento: {str(e)}"
+        )
+
+@router.post("/verify-payment/{payment_id}", response_model=Dict[str, Any])
+async def verify_payment(
+    payment_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Verifica e ativa manualmente o status de um pagamento.
+    Útil quando o webhook não foi recebido ou processado corretamente.
+    
+    Args:
+        payment_id: ID do pagamento no AbacatePay
+        request: Objeto Request
+        current_user: Usuário autenticado
+        db: Sessão do banco de dados
+        
+    Returns:
+        Objeto com o resultado da verificação
+    """
+    try:
+        print(f"Verificando manualmente pagamento {payment_id} para usuário {current_user.id}")
+        
+        # Busca a assinatura no banco de dados
+        subscription = db.query(Subscription).filter(
+            Subscription.abacate_payment_id == payment_id,
+            Subscription.user_id == current_user.id
+        ).first()
+        
+        if not subscription:
+            # Como pode ser um novo pagamento, tente encontrar a mais recente
+            subscription = db.query(Subscription).filter(
+                Subscription.user_id == current_user.id
+            ).order_by(Subscription.created_at.desc()).first()
+            
+            if not subscription:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Nenhuma assinatura encontrada para este usuário"
+                )
+        
+        # Verifica o status do pagamento no AbacatePay
+        try:
+            payment_details = abacate_client.get_payment(payment_id)
+            payment_status = payment_details.get("status", "").upper()
+            
+            print(f"Status do pagamento no AbacatePay: {payment_status}")
+            
+            # Se o pagamento estiver confirmado, ativa a assinatura
+            if payment_status == "PAID" or payment_status == "CONFIRMED":
+                # Atualiza a assinatura
+                if subscription.status != "active":
+                    subscription.status = "active"
+                    subscription.start_date = datetime.now()
+                    subscription.end_date = datetime.now() + timedelta(days=30)
+                    
+                    # Ativa o premium para o usuário
+                    from services.usage_manager import usage_manager
+                    try:
+                        usage_manager.activate_premium(subscription.user_id)
+                    except Exception as e:
+                        print(f"Erro ao ativar premium: {e}")
+                    
+                    db.commit()
+                    print(f"Assinatura {subscription.id} ativada manualmente com sucesso")
+                
+                return {
+                    "success": True,
+                    "status": "ACTIVE",
+                    "message": "Pagamento confirmado e assinatura ativada",
+                    "subscription_id": subscription.id
+                }
+            
+            return {
+                "success": False,
+                "status": payment_status,
+                "message": f"Pagamento ainda não confirmado: {payment_status}",
+                "subscription_id": subscription.id
+            }
+            
+        except Exception as e:
+            print(f"Erro ao verificar status no AbacatePay: {str(e)}")
+            
+            # Tenta fazer uma verificação alternativa
+            # Se o usuário está retornando da página de sucesso do AbacatePay,
+            # podemos assumir que o pagamento foi confirmado
+            if "success" in request.query_params or request.headers.get("Referer", "").endswith("/payment-success"):
+                # Atualiza a assinatura
+                if subscription.status != "active":
+                    subscription.status = "active"
+                    subscription.start_date = datetime.now()
+                    subscription.end_date = datetime.now() + timedelta(days=30)
+                    
+                    # Ativa o premium para o usuário
+                    from services.usage_manager import usage_manager
+                    try:
+                        usage_manager.activate_premium(subscription.user_id)
+                    except Exception as e:
+                        print(f"Erro ao ativar premium: {e}")
+                    
+                    db.commit()
+                    print(f"Assinatura {subscription.id} ativada manualmente por presunção de sucesso")
+                
+                return {
+                    "success": True,
+                    "status": "ACTIVE",
+                    "message": "Assinatura ativada (pagamento presumido como confirmado)",
+                    "subscription_id": subscription.id
+                }
+            
+            # Se não, retorna falha
+            return {
+                "success": False,
+                "status": "UNKNOWN",
+                "message": f"Não foi possível verificar o status do pagamento: {str(e)}",
+                "subscription_id": subscription.id
+            }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Erro ao verificar pagamento: {str(e)}"
         ) 

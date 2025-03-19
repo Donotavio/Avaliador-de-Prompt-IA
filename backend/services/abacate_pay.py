@@ -188,15 +188,26 @@ class AbacatePayClient:
         Returns:
             Dict com a resposta da API contendo as informações do pagamento
         """
-        # A URL correta para buscar detalhes do pagamento
-        endpoint = f"{self.base_url}/bills/{payment_id}"
+        # Primeiro, tenta o endpoint baseado no prefixo do ID
+        if payment_id.startswith('bill_'):
+            primary_endpoint = f"{self.base_url}/invoices/{payment_id}"
+            backup_endpoint = f"{self.base_url}/bills/{payment_id}"
+        else:
+            primary_endpoint = f"{self.base_url}/bills/{payment_id}"
+            backup_endpoint = f"{self.base_url}/invoices/{payment_id}"
         
         try:
             # Faz a requisição para a API
-            response = requests.get(endpoint, headers=self.headers)
+            response = requests.get(primary_endpoint, headers=self.headers)
             
             # Verifica a resposta e loga para debug
             print(f"AbacatePay Payment Details Response: Status={response.status_code}, Headers={response.headers}, Data={response.text}")
+            
+            # Se retornou 404, tenta o endpoint alternativo
+            if response.status_code == 404:
+                print(f"Tentando endpoint alternativo: {backup_endpoint}")
+                response = requests.get(backup_endpoint, headers=self.headers)
+                print(f"AbacatePay Alternative Endpoint Response: Status={response.status_code}, Headers={response.headers}, Data={response.text}")
             
             # Verifica se a resposta foi bem-sucedida
             if response.status_code != 200:
