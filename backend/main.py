@@ -8,7 +8,7 @@ principais e middleware necessários.
 # Importa o patch para OpenAI antes de qualquer outra coisa
 import openai_patch
 
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
 from api.prompt_evaluator import router as prompt_router
 from core.evaluator import PromptEvaluator
@@ -24,10 +24,14 @@ from utils.logger import logger
 
 # Importação para sistema de usuários e pagamentos
 from database import Base, engine, get_db
-from api import auth, users, payments
+from api import auth, users, payments, products
 from models.user import User
 from services.auth import get_current_user, get_current_admin_user
 from sqlalchemy.orm import Session
+
+# Constantes para configuração da API
+API_PREFIX = "/api"
+ALLOWED_HOSTS = ["*"]
 
 # Cria tabelas no banco de dados (se não existirem)
 Base.metadata.create_all(bind=engine)
@@ -36,24 +40,28 @@ app = FastAPI(
     title="Avaliador de Prompts IA",
     description="API para avaliação e otimização de prompts para Inteligência Artificial",
     version="1.0.0",
+    openapi_url=f"{API_PREFIX}/openapi.json",
+    docs_url=f"{API_PREFIX}/docs",
+    redoc_url=f"{API_PREFIX}/redoc",
 )
 
 # Configuração do CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_HOSTS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Inclui rotas da API de autenticação, usuários e pagamentos
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(payments.router)
+# Inclui rotas com prefixo API
+app.include_router(auth.router, prefix=API_PREFIX)
+app.include_router(users.router, prefix=API_PREFIX)
+app.include_router(payments.router, prefix=API_PREFIX)
+app.include_router(products.router, prefix=API_PREFIX)
 
 # Inclui rotas de avaliação de prompts
-app.include_router(prompt_router)
+app.include_router(prompt_router, prefix=API_PREFIX)
 
 # Inicializa o avaliador
 evaluator = PromptEvaluator()

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import Any, List
+from typing import Any, List, Dict
 
 from database import get_db
 from models.user import User
@@ -77,4 +77,35 @@ def read_user(
             detail="Usuário não encontrado"
         )
         
-    return user 
+    return user
+
+@router.get("/me/payment-info", response_model=Dict[str, Any])
+async def get_payment_info(
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    Retorna as informações de pagamento salvas do usuário atual
+    
+    Returns:
+        Dados de pagamento e endereço do usuário
+    """
+    return {
+        # Dados básicos
+        "email": current_user.email,
+        "fullName": current_user.full_name,
+        "phone": current_user.phone or "",
+        "taxId": current_user.tax_id or "",
+        
+        # Dados de endereço
+        "address": current_user.address_street or "",
+        "addressNumber": current_user.address_number or "",
+        "complement": current_user.address_complement or "",
+        "neighborhood": current_user.address_neighborhood or "",
+        "city": current_user.address_city or "",
+        "state": current_user.address_state or "",
+        "postalCode": current_user.address_postal_code or "",
+        "country": current_user.address_country or "BR",
+        
+        # Método de pagamento
+        "preferredPaymentMethod": current_user.preferred_payment_method or "PIX"
+    } 

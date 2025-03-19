@@ -21,18 +21,35 @@ class UserUpdate(BaseModel):
     password: Optional[str] = Field(None, min_length=8)
     is_active: Optional[bool] = None
 
-# Schema para resposta de usuário (sem senha)
-class User(UserBase):
-    """Esquema para representação de usuários existentes"""
+# Schema para representação completa de usuários
+class User(BaseModel):
     id: str
-    is_active: bool = True
-    is_admin: bool = False
+    email: str
+    full_name: str
+    is_active: bool
+    is_admin: bool
+    abacate_customer_id: Optional[str] = None
+    phone: Optional[str] = None
+    tax_id: Optional[str] = None
+    
+    # Campos de endereço
+    address_street: Optional[str] = None
+    address_number: Optional[str] = None
+    address_complement: Optional[str] = None
+    address_neighborhood: Optional[str] = None
+    address_city: Optional[str] = None
+    address_state: Optional[str] = None
+    address_postal_code: Optional[str] = None
+    address_country: Optional[str] = None
+    
+    # Método de pagamento preferido
+    preferred_payment_method: Optional[str] = None
+    
     created_at: datetime
     updated_at: datetime
-    abacate_customer_id: Optional[str] = None
-
+    
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Schema para login
 class UserLogin(BaseModel):

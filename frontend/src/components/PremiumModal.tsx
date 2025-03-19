@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import PaymentForm from './PaymentForm';
 import './PremiumModal.css';
 
 interface PremiumModalProps {
@@ -13,8 +14,14 @@ interface UserFormData {
   password_confirm: string;
 }
 
+enum ModalStep {
+  INTRO = 'intro',
+  REGISTER = 'register',
+  PAYMENT = 'payment'
+}
+
 const PremiumModal: React.FC<PremiumModalProps> = ({ onClose, refreshPage = false }) => {
-  const [showRegisterForm, setShowRegisterForm] = useState(false);
+  const [currentStep, setCurrentStep] = useState<ModalStep>(ModalStep.INTRO);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -25,9 +32,20 @@ const PremiumModal: React.FC<PremiumModalProps> = ({ onClose, refreshPage = fals
     password_confirm: ''
   });
 
+  // Função para verificar se o usuário está logado
+  const isLoggedIn = (): boolean => {
+    return !!localStorage.getItem('token');
+  };
+
+  // Avança para o passo de pagamento ou registro dependendo se o usuário está logado
   const handlePurchase = () => {
-    // Se o usuário não estiver logado, mostrar formulário de cadastro
-    setShowRegisterForm(true);
+    if (isLoggedIn()) {
+      // Se o usuário já estiver logado, vai direto para pagamento
+      setCurrentStep(ModalStep.PAYMENT);
+    } else {
+      // Se não estiver logado, mostra formulário de cadastro
+      setCurrentStep(ModalStep.REGISTER);
+    }
   };
 
   const handleContinueFree = () => {
@@ -116,12 +134,8 @@ const PremiumModal: React.FC<PremiumModalProps> = ({ onClose, refreshPage = fals
         fullName: loginData.full_name
       }));
 
-      // Redirecionar para a página principal com o usuário já logado
-      // Em vez de tentar criar o pagamento aqui
-      onClose();
-      if (refreshPage) {
-        window.location.reload();
-      }
+      // Após registro e login bem-sucedidos, avança para o passo de pagamento
+      setCurrentStep(ModalStep.PAYMENT);
     } catch (error) {
       console.error('Erro:', error);
       setError(error instanceof Error ? error.message : 'Erro ao processar solicitação');
@@ -130,76 +144,17 @@ const PremiumModal: React.FC<PremiumModalProps> = ({ onClose, refreshPage = fals
     }
   };
 
-  const handlePaymentClick = async () => {
-    setIsLoading(true);
-    setPaymentError(null);
-    
-    // Verificar se o usuário está logado
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-      setPaymentError('Você precisa fazer login para continuar');
-      setIsLoading(false);
-      return;
-    }
-    
-    try {
-      // Verificar se o token é válido
-      const userProfileResponse = await fetch('/auth/me', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (!userProfileResponse.ok) {
-        // Se o token não for válido, limpar o localStorage
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        setPaymentError('Sessão expirada. Por favor, faça login novamente.');
-        setIsLoading(false);
-        return;
-      }
-      
-      // Criar pagamento para assinatura premium
-      const paymentResponse = await fetch('/payments/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          plan_type: 'premium',
-          amount: 49.90
-        }),
-      });
-
-      if (!paymentResponse.ok) {
-        const data = await paymentResponse.json();
-        throw new Error(data.detail || 'Erro ao criar pagamento');
-      }
-
-      const paymentData = await paymentResponse.json();
-      
-      // Verificar se há URL de checkout
-      if (!paymentData.checkout_url) {
-        throw new Error('URL de checkout não disponível');
-      }
-      
-      // Redirecionar para URL de checkout
-      window.location.href = paymentData.checkout_url;
-    } catch (error) {
-      console.error('Erro ao criar pagamento:', error);
-      setPaymentError(error instanceof Error ? error.message : 'Erro ao processar pagamento');
-    } finally {
-      setIsLoading(false);
-    }
+  // Função chamada quando o pagamento é processado com sucesso
+  const handlePaymentSuccess = (checkoutUrl: string) => {
+    // Redireciona para a URL de pagamento
+    window.location.href = checkoutUrl;
   };
 
-  return (
-    <div className="modal-overlay" onClick={showRegisterForm ? undefined : onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
-        {!showRegisterForm ? (
+  // Renderiza o passo atual do modal
+  const renderStep = () => {
+    switch (currentStep) {
+      case ModalStep.INTRO:
+        return (
           <>
             <h2>Plano Premium</h2>
             <p>Aproveite todas as vantagens do plano premium:</p>
@@ -217,23 +172,18 @@ const PremiumModal: React.FC<PremiumModalProps> = ({ onClose, refreshPage = fals
             {paymentError && <div className="error-message">{paymentError}</div>}
             
             <div className="modal-buttons">
-              {localStorage.getItem('token') ? (
-                // Se o usuário já estiver logado, mostrar botão de pagamento direto
-                <button className="premium-button" onClick={handlePaymentClick} disabled={isLoading}>
-                  {isLoading ? 'Processando...' : 'Assinar Agora'}
-                </button>
-              ) : (
-                // Se não estiver logado, mostrar botão para cadastro
-                <button className="premium-button" onClick={handlePurchase}>
-                  Criar Conta
-                </button>
-              )}
+              <button className="premium-button" onClick={handlePurchase}>
+                {isLoggedIn() ? 'Assinar Agora' : 'Criar Conta'}
+              </button>
               <button className="cancel-button" onClick={handleContinueFree}>
                 Continuar no Plano Gratuito
               </button>
             </div>
           </>
-        ) : (
+        );
+        
+      case ModalStep.REGISTER:
+        return (
           <>
             <h2>Criar Conta</h2>
             <p>Preencha os dados abaixo para criar sua conta</p>
@@ -274,7 +224,6 @@ const PremiumModal: React.FC<PremiumModalProps> = ({ onClose, refreshPage = fals
                   value={formData.password}
                   onChange={handleChange}
                   required
-                  minLength={8}
                 />
                 <small>Mínimo de 8 caracteres</small>
               </div>
@@ -292,25 +241,31 @@ const PremiumModal: React.FC<PremiumModalProps> = ({ onClose, refreshPage = fals
               </div>
               
               <div className="modal-buttons">
-                <button 
-                  type="submit" 
-                  className="premium-button"
-                  disabled={isLoading}
-                >
-                  {isLoading ? 'Processando...' : 'Criar Conta'}
+                <button type="submit" className="premium-button" disabled={isLoading}>
+                  {isLoading ? 'Processando...' : 'Continuar'}
                 </button>
-                <button 
-                  type="button" 
-                  className="cancel-button"
-                  onClick={() => setShowRegisterForm(false)}
-                  disabled={isLoading}
-                >
+                <button type="button" className="back-button" onClick={() => setCurrentStep(ModalStep.INTRO)}>
                   Voltar
                 </button>
               </div>
             </form>
           </>
-        )}
+        );
+        
+      case ModalStep.PAYMENT:
+        return (
+          <PaymentForm 
+            onClose={() => setCurrentStep(ModalStep.INTRO)} 
+            onSuccess={handlePaymentSuccess} 
+          />
+        );
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={currentStep === ModalStep.INTRO ? onClose : undefined}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        {renderStep()}
       </div>
     </div>
   );

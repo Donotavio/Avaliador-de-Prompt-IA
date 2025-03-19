@@ -29,9 +29,22 @@ class User(Base):
     # ID do cliente no serviço de pagamento AbacatePay
     abacate_customer_id = Column(String(255), nullable=True)
     
-    # Campos opcionais para informações complementares
+    # Campos para informações básicas do usuário
     phone = Column(String(20), nullable=True)
     tax_id = Column(String(20), nullable=True)  # CPF ou CNPJ
+    
+    # Campos para endereço completo
+    address_street = Column(String(255), nullable=True)
+    address_number = Column(String(20), nullable=True)
+    address_complement = Column(String(100), nullable=True)
+    address_neighborhood = Column(String(100), nullable=True)
+    address_city = Column(String(100), nullable=True)
+    address_state = Column(String(2), nullable=True)
+    address_postal_code = Column(String(10), nullable=True)
+    address_country = Column(String(2), default="BR")
+    
+    # Método de pagamento preferido
+    preferred_payment_method = Column(String(20), nullable=True)  # PIX, CREDIT_CARD, BOLETO
 
     def verify_password(self, password: str) -> bool:
         """Verifica se a senha fornecida corresponde à senha hash armazenada"""
