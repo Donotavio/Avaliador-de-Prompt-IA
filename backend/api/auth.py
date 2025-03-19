@@ -5,13 +5,30 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from typing import Any, Dict
 import logging
 import re
+import secrets
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timedelta
+import os
+from dotenv import load_dotenv
 
 from services.database import get_db
 from models.user import User
-from schemas.user_schema import UserCreate, User as UserSchema
+from schemas.user_schema import UserCreate, User as UserSchema, PasswordRecovery, PasswordReset
 from schemas.token_schema import Token
 from services.auth import authenticate_user, create_access_token, get_current_user
 from services.abacate_pay import AbacatePayClient
+
+# Carrega variáveis de ambiente
+load_dotenv()
+
+# Obtém configurações de e-mail
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USER = os.getenv("EMAIL_USER", "")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "no-reply@example.com")
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -36,6 +53,38 @@ def format_phone(value: str) -> str:
         # Formato com DDD e número
         return cleaned
     return cleaned
+
+def send_email(to_email: str, subject: str, html_content: str) -> bool:
+    """
+    Envia um e-mail com o conteúdo especificado
+    """
+    if not EMAIL_USER or not EMAIL_PASSWORD:
+        logger.error("Configurações de e-mail não definidas")
+        return False
+    
+    try:
+        message = MIMEMultipart()
+        message["From"] = EMAIL_FROM
+        message["To"] = to_email
+        message["Subject"] = subject
+        
+        # Adiciona o corpo HTML
+        message.attach(MIMEText(html_content, "html"))
+        
+        # Conecta ao servidor SMTP
+        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASSWORD)
+        
+        # Envia o e-mail
+        server.send_message(message)
+        server.quit()
+        
+        logger.info(f"E-mail enviado para {to_email}")
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao enviar e-mail: {str(e)}")
+        return False
 
 @router.get("/me")
 async def read_users_me(current_user: User = Depends(get_current_user)):
@@ -162,4 +211,110 @@ def login(
         "email": user.email,
         "full_name": user.full_name,
         "is_admin": user.is_admin
-    } 
+    }
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+def forgot_password(recovery_data: PasswordRecovery, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """
+    Inicia processo de recuperação de senha para um usuário
+    """
+    # Procura usuário pelo e-mail
+    user = db.query(User).filter(User.email == recovery_data.email).first()
+    
+    # Mesmo que o usuário não exista, retornamos sucesso para evitar 
+    # a descoberta de e-mails válidos (proteção contra enumeração)
+    if not user:
+        logger.info(f"Tentativa de recuperação para e-mail não cadastrado: {recovery_data.email}")
+        return {"message": "Se o e-mail estiver cadastrado, você receberá instruções para recuperar sua senha."}
+    
+    # Gera um token único para recuperação de senha
+    reset_token = secrets.token_urlsafe(32)
+    reset_expiry = datetime.utcnow() + timedelta(hours=1)  # Token válido por 1 hora
+    
+    # Armazena token e data de expiração
+    user.reset_password_token = reset_token
+    user.reset_password_expires = reset_expiry
+    db.commit()
+    
+    # URL para o frontend com o token
+    reset_url = f"{recovery_data.frontend_url}?token={reset_token}"
+    
+    # Template HTML do e-mail
+    html_content = f"""
+    <html>
+        <body>
+            <h2>Recuperação de Senha</h2>
+            <p>Olá {user.full_name},</p>
+            <p>Recebemos uma solicitação para recuperar sua senha. Se você não fez esta solicitação, ignore este e-mail.</p>
+            <p>Para criar uma nova senha, clique no link abaixo:</p>
+            <p><a href="{reset_url}">Redefinir minha senha</a></p>
+            <p>Este link é válido por 1 hora.</p>
+            <p>Atenciosamente,<br>Equipe de Suporte</p>
+        </body>
+    </html>
+    """
+    
+    # Envia e-mail com link de recuperação
+    email_sent = send_email(
+        user.email,
+        "Recuperação de Senha",
+        html_content
+    )
+    
+    if not email_sent:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao enviar e-mail de recuperação"
+        )
+    
+    logger.info(f"E-mail de recuperação enviado para: {user.email}")
+    return {"message": "Se o e-mail estiver cadastrado, você receberá instruções para recuperar sua senha."}
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+def reset_password(reset_data: PasswordReset, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """
+    Redefine a senha do usuário após validação do token
+    """
+    # Busca usuário pelo token
+    user = db.query(User).filter(
+        User.reset_password_token == reset_data.token
+    ).first()
+    
+    # Verifica se o token existe e é válido
+    if not user or not user.reset_password_expires:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token inválido ou expirado"
+        )
+    
+    # Verifica se o token expirou
+    if datetime.utcnow() > user.reset_password_expires:
+        # Limpa o token expirado
+        user.reset_password_token = None
+        user.reset_password_expires = None
+        db.commit()
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token expirado. Solicite um novo link de recuperação."
+        )
+    
+    # Verifica força da senha
+    if len(reset_data.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A senha deve ter pelo menos 8 caracteres"
+        )
+    
+    # Atualiza a senha
+    user.hashed_password = User.get_password_hash(reset_data.new_password)
+    
+    # Limpa o token após o uso
+    user.reset_password_token = None
+    user.reset_password_expires = None
+    
+    # Salva as alterações
+    db.commit()
+    
+    logger.info(f"Senha redefinida com sucesso para o usuário: {user.email}")
+    return {"message": "Senha redefinida com sucesso"} 

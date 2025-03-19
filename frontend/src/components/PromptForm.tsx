@@ -74,11 +74,14 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
 
   useEffect(() => {
     const checkStatus = async () => {
-      await checkPremiumStatus();
-      await checkFreeStatus();
+      if (isPremium) {
+        setEvaluationCount(0); // Não importa para usuários premium
+      } else {
+        await checkFreeStatus();
+      }
     };
     checkStatus();
-  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userId, isPremium]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const checkUserRole = async () => {
@@ -114,50 +117,34 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
     setTimeout(() => setError(null), 5000);
   };
 
-  const checkPremiumStatus = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const actualUserId = userId || 'anon';
-      
-      const response = await fetch(`/premium/status/${actualUserId}`, {
-        headers: token ? {
-          'Authorization': `Bearer ${token}`
-        } : {}
-      });
-      
-      if (!response.ok) {
-        // Se o erro for 401 ou 403, definimos valores padrão para usuários não autenticados
-        if (response.status === 401 || response.status === 403) {
-          setEvaluationCount(null);
-          return;
-        }
-        throw new Error('Falha ao verificar status premium');
-      }
-      
-      const data = await response.json();
-      setEvaluationCount(data.evaluation_count);
-      
-      // Não definir mensagem de status para usuários premium
-      // Só definir erro se explicitamente não puder usar premium
-      if (data.status === false) {
-        setError(data.message);
-      } else {
-        // Limpar mensagens de erro anteriores se o status for ok
-        setError(null);
-      }
-    } catch (error) {
-      console.error('Erro ao verificar status premium:', error);
-      // Por padrão, define que não pode usar premium
-      setEvaluationCount(null);
-      setError('Não foi possível verificar o status premium');
-    }
-  };
-
   const checkFreeStatus = async () => {
     try {
       const token = localStorage.getItem('token');
       const actualUserId = userId || 'anon';
       
+      console.log('Verificando status free para usuário:', actualUserId);
+      
+      // Primeiro, obter o número real de avaliações usadas
+      const countResponse = await fetch(`/api/usage/count/${actualUserId}`, {
+        headers: token ? {
+          'Authorization': `Bearer ${token}`
+        } : {}
+      }).catch(() => null);
+      
+      // Valor padrão para contagem de uso
+      let usedEvaluations = 0;
+      
+      if (countResponse && countResponse.ok) {
+        try {
+          const countData = await countResponse.json();
+          usedEvaluations = countData.count || 0;
+          console.log(`Usuário usou ${usedEvaluations} de ${maxFreeEvaluations} avaliações hoje`);
+        } catch (e) {
+          console.error("Erro ao processar dados de contagem:", e);
+        }
+      }
+      
+      // Verificar status gratuito
       const response = await fetch(`/free/status/${actualUserId}`, {
         headers: token ? {
           'Authorization': `Bearer ${token}`
@@ -165,28 +152,28 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
       });
       
       if (!response.ok) {
-        // Se o erro for 401 ou 403, definimos valores padrão para usuários não autenticados
-        if (response.status === 401 || response.status === 403) {
-          setEvaluationCount(maxFreeEvaluations);
-          return;
-        }
-        throw new Error('Falha ao verificar status gratuito');
+        console.log('Erro ao verificar status gratuito, código:', response.status);
+        setEvaluationCount(usedEvaluations); // Usar a contagem obtida ou 0 como padrão
+        return;
       }
       
       const data = await response.json();
-      setEvaluationCount(data.evaluation_count);
+      console.log('Resposta da API /free/status:', data);
       
-      // Só definir erro se o status for falso (não pode usar)
-      if (data.status === false) {
-        setError(data.message);
+      // O backend retorna can_use_free: false quando o limite diário foi atingido
+      if (data.can_use_free === false) {
+        console.log('Limite diário atingido, não pode mais usar plano gratuito');
+        setEvaluationCount(maxFreeEvaluations); // Usuário já usou todas as avaliações
+        setError('Limite diário de avaliações gratuitas atingido');
       } else {
-        // Limpar mensagens de erro anteriores se o status for ok
+        // Usuário ainda pode usar o plano gratuito
+        // Usamos o contador real obtido da API de contagem ou o padrão
+        setEvaluationCount(usedEvaluations);
         setError(null);
       }
     } catch (error) {
       console.error('Erro ao verificar status gratuito:', error);
-      // Em caso de erro, definimos valores padrão permissivos
-      setEvaluationCount(maxFreeEvaluations);
+      setEvaluationCount(0); // Valor conservador em caso de erro
     }
   };
 
@@ -307,8 +294,29 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
         
         {evaluationCount !== null && !isPremium && (
           <div className="evaluation-count">
-            <span>{maxFreeEvaluations - (evaluationCount || 0)}/{maxFreeEvaluations} avaliações restantes</span>
-            {evaluationCount >= maxFreeEvaluations / 2 && (
+            {evaluationCount >= maxFreeEvaluations ? (
+              <span>0/{maxFreeEvaluations} avaliações restantes</span>
+            ) : (
+              <span>
+                {(() => {
+                  // Verificar se evaluationCount é um número válido
+                  if (isNaN(evaluationCount)) {
+                    return `${maxFreeEvaluations}/${maxFreeEvaluations}`;
+                  }
+                  
+                  // Calcular o número de avaliações restantes
+                  const remaining = Math.max(0, maxFreeEvaluations - evaluationCount);
+                  
+                  // Log para debug
+                  console.log(`Avaliações: total=${maxFreeEvaluations}, usadas=${evaluationCount}, restantes=${remaining}`);
+                  
+                  return `${remaining}/${maxFreeEvaluations}`;
+                })()}
+                {" "}avaliações restantes
+              </span>
+            )}
+            
+            {!isNaN(evaluationCount) && evaluationCount >= maxFreeEvaluations / 2 && (
               <button 
                 className="btn btn-secondary" 
                 onClick={openPremiumModal || handleOpenPremiumModal}
@@ -325,7 +333,7 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
           </div>
         )}
         
-        {evaluationCount !== null && evaluationCount >= maxFreeEvaluations && !isPremium && (
+        {evaluationCount !== null && !isNaN(evaluationCount) && evaluationCount >= maxFreeEvaluations && !isPremium && (
           <p className="prompt-status error">
             <AlertIcon />
             Limite diário de {maxFreeEvaluations} avaliações gratuitas atingido

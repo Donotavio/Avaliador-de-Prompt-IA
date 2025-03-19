@@ -76,7 +76,7 @@ const EvaluationResult: React.FC<EvaluationResultProps> = ({ result }) => {
   return (
     <div 
       ref={resultRef} 
-      className={`prompt-evaluation ${fadeIn ? 'fade-in' : ''}`}
+      className={`resultado-avaliacao prompt-evaluation ${fadeIn ? 'fade-in' : ''}`}
     >
       <div className="evaluation-header">
         <h2 className="evaluation-title">Resultado da Avaliação</h2>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import PromptForm from './components/PromptForm';
 import PremiumModal from './components/PremiumModal';
 import PaymentSuccessPage from './components/PaymentSuccessPage';
@@ -82,12 +82,52 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
   });
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const toggleMode = () => setIsLogin(!isLogin);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleForgotPassword = () => {
+    setShowForgotPassword(true);
+  };
+
+  const handleBackToLogin = () => {
+    setShowForgotPassword(false);
+  };
+
+  const handleSubmitForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email,
+          frontend_url: `${window.location.origin}/reset-password`
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || 'Erro ao processar solicitação');
+      }
+
+      // Exibir mensagem de sucesso
+      alert('Se o e-mail estiver cadastrado, você receberá instruções para recuperar sua senha.');
+      setShowForgotPassword(false);
+    } catch (error) {
+      console.error('Erro:', error);
+      setError(error instanceof Error ? error.message : 'Erro ao processar solicitação');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -217,94 +257,287 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
       <div className="auth-modal-container" onClick={e => e.stopPropagation()}>
         <button className="auth-close-button" onClick={onClose}>×</button>
         
-        <div className="auth-modal-header">
-          <h2 className="auth-modal-title">{isLogin ? 'Entrar' : 'Criar Conta'}</h2>
-        </div>
-        
-        <div className="auth-modal-content">
-          {error && <div className="auth-error-message">{error}</div>}
-          
-          <form onSubmit={handleSubmit}>
-            <div className="auth-form-group">
-              <label htmlFor="email">Email*</label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                required
-              />
+        {showForgotPassword ? (
+          // Formulário de recuperação de senha
+          <>
+            <div className="auth-modal-header">
+              <h2 className="auth-modal-title">Recuperar Senha</h2>
             </div>
-
-            {!isLogin && (
-              <div className="auth-form-group">
-                <label htmlFor="full_name">Nome Completo*</label>
-                <input
-                  type="text"
-                  id="full_name"
-                  name="full_name"
-                  value={formData.full_name}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            )}
-
-            <div className="auth-form-group">
-              <label htmlFor="password">Senha*</label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                required
-              />
-              {!isLogin && (
-                <div className="auth-form-password-hint">
-                  <InfoIcon />
-                  <span>Mínimo de 8 caracteres</span>
+            
+            <div className="auth-modal-content">
+              {error && <div className="auth-error-message">{error}</div>}
+              
+              <form onSubmit={handleSubmitForgotPassword}>
+                <div className="auth-form-group">
+                  <label htmlFor="recovery-email">Email*</label>
+                  <input
+                    type="email"
+                    id="recovery-email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    required
+                  />
                 </div>
-              )}
+                
+                <div className="auth-form-actions recovery-actions">
+                  <button
+                    type="button"
+                    className="auth-secondary-button"
+                    onClick={handleBackToLogin}
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="submit"
+                    className="auth-primary-button"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Enviando...' : 'Enviar link de recuperação'}
+                  </button>
+                </div>
+              </form>
             </div>
+          </>
+        ) : (
+          // Formulário de login/registro
+          <>
+            <div className="auth-modal-header">
+              <h2 className="auth-modal-title">{isLogin ? 'Entrar' : 'Criar Conta'}</h2>
+            </div>
+            
+            <div className="auth-modal-content">
+              {error && <div className="auth-error-message">{error}</div>}
+              
+              <form onSubmit={handleSubmit}>
+                <div className="auth-form-group">
+                  <label htmlFor="email">Email*</label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
 
-            {!isLogin && (
-              <div className="auth-form-group">
-                <label htmlFor="password_confirm">Confirmar Senha*</label>
-                <input
-                  type="password"
-                  id="password_confirm"
-                  name="password_confirm"
-                  value={formData.password_confirm}
-                  onChange={handleChange}
-                  required
-                />
+                {!isLogin && (
+                  <div className="auth-form-group">
+                    <label htmlFor="full_name">Nome Completo*</label>
+                    <input
+                      type="text"
+                      id="full_name"
+                      name="full_name"
+                      value={formData.full_name}
+                      onChange={handleChange}
+                      required
+                    />
+                  </div>
+                )}
+
+                <div className="auth-form-group">
+                  <label htmlFor="password">Senha*</label>
+                  <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                  />
+                  {!isLogin && (
+                    <div className="auth-form-password-hint">
+                      <InfoIcon />
+                      <span>Mínimo de 8 caracteres</span>
+                    </div>
+                  )}
+                </div>
+
+                {!isLogin && (
+                  <div className="auth-form-group">
+                    <label htmlFor="password_confirm">Confirmar Senha*</label>
+                    <input
+                      type="password"
+                      id="password_confirm"
+                      name="password_confirm"
+                      value={formData.password_confirm}
+                      onChange={handleChange}
+                      required
+                    />
+                  </div>
+                )}
+
+                {isLogin && (
+                  <div className="auth-forgot-password">
+                    <button 
+                      type="button" 
+                      className="auth-text-button"
+                      onClick={handleForgotPassword}
+                    >
+                      Esqueceu a senha?
+                    </button>
+                  </div>
+                )}
+
+                <div className="auth-form-actions">
+                  <button
+                    type="submit"
+                    className="auth-submit-button"
+                    disabled={isLoading}
+                  >
+                    {isLoading
+                      ? 'Processando...'
+                      : isLogin
+                        ? 'Entrar'
+                        : 'Criar Conta'
+                    }
+                  </button>
+                </div>
+              </form>
+              
+              <div className="auth-toggle-mode">
+                <span>{isLogin ? 'Ainda não tem conta?' : 'Já tem uma conta?'}</span>
+                <button
+                  type="button"
+                  className="auth-text-button"
+                  onClick={toggleMode}
+                >
+                  {isLogin ? 'Criar Conta' : 'Fazer Login'}
+                </button>
               </div>
-            )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
 
-            <button type="submit" className="auth-submit-button" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <div className="spinner"></div>
-                  <span>Processando...</span>
-                </>
-              ) : (
-                isLogin ? 'Entrar' : 'Cadastrar'
-              )}
-            </button>
-          </form>
-        </div>
-        
-        <div className="auth-modal-footer">
-          <div className="auth-alternate-action">
-            {isLogin ? 'Não tem uma conta?' : 'Já tem uma conta?'}
-            <button type="button" onClick={toggleMode}>
-              {isLogin ? 'Cadastre-se' : 'Entrar'}
-            </button>
+// Componente para redefinição de senha
+const ResetPasswordPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
+  const [formData, setFormData] = useState({
+    token: token || '',
+    new_password: '',
+    confirm_password: ''
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setIsLoading(true);
+
+    // Validação básica
+    if (formData.new_password !== formData.confirm_password) {
+      setError('As senhas não coincidem');
+      setIsLoading(false);
+      return;
+    }
+
+    if (formData.new_password.length < 8) {
+      setError('A senha deve ter pelo menos 8 caracteres');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: formData.token,
+          new_password: formData.new_password
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || 'Erro ao redefinir senha');
+      }
+
+      setSuccess(true);
+    } catch (error) {
+      console.error('Erro:', error);
+      setError(error instanceof Error ? error.message : 'Erro ao processar solicitação');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!token) {
+    return (
+      <div className="reset-password-container error-container">
+        <h2>Link Inválido</h2>
+        <p>O link de recuperação de senha é inválido ou expirou.</p>
+        <a href="/" className="button-link">Voltar para o início</a>
+      </div>
+    );
+  }
+
+  if (success) {
+    return (
+      <div className="reset-password-container success-container">
+        <h2>Senha Redefinida</h2>
+        <p>Sua senha foi redefinida com sucesso!</p>
+        <a href="/" className="button-link">Voltar para o início</a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="reset-password-container">
+      <h2>Redefinir Senha</h2>
+      
+      {error && <div className="error-message">{error}</div>}
+      
+      <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label htmlFor="new_password">Nova Senha*</label>
+          <input
+            type="password"
+            id="new_password"
+            name="new_password"
+            value={formData.new_password}
+            onChange={handleChange}
+            required
+            minLength={8}
+          />
+          <div className="password-hint">
+            <InfoIcon />
+            <span>Mínimo de 8 caracteres</span>
           </div>
         </div>
-      </div>
+        
+        <div className="form-group">
+          <label htmlFor="confirm_password">Confirmar Senha*</label>
+          <input
+            type="password"
+            id="confirm_password"
+            name="confirm_password"
+            value={formData.confirm_password}
+            onChange={handleChange}
+            required
+          />
+        </div>
+        
+        <button
+          type="submit"
+          className="submit-button"
+          disabled={isLoading}
+        >
+          {isLoading ? 'Processando...' : 'Redefinir Senha'}
+        </button>
+      </form>
     </div>
   );
 };
@@ -463,6 +696,7 @@ const App: React.FC = () => {
               <Route path="/payment-success" element={
                 <PaymentSuccessPage userId={userId} />
               } />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               {/* Rota fallback para páginas não encontradas */}
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>

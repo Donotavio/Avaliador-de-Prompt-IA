@@ -19,8 +19,9 @@
 /* Estilos específicos para os elementos do formulário na página principal */
 /* Estes estilos ajudam a corrigir problemas com o formulário do avaliador de prompts */
 
-.prompt-form {
-  max-width: 800px;
+.prompt-form, .resultado-avaliacao {
+  width: 100%;
+  max-width: 1000px;
   margin: 0 auto;
   padding: var(--space-6);
   background-color: white;
@@ -479,7 +480,7 @@
 
 /* Página de detalhes do prompt */
 .prompt-details {
-  max-width: 800px;
+  max-width: 1000px;
   margin: 0 auto;
 }
 
@@ -532,7 +533,7 @@
 }
 
 .prompt-evaluation {
-  margin-top: var(--space-8);
+  margin-top: 0;
   background-color: white;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
@@ -1082,10 +1083,28 @@ x-close-button {
 /* Estilos para o modal Premium */
 .premium-modal {
   max-width: 500px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.premium-modal .modal-header {
+  background: linear-gradient(45deg, var(--primary-700), var(--primary-500));
+  color: white;
+  padding: var(--space-6) var(--space-6) var(--space-6);
+  text-align: center;
+  border-bottom: none;
+}
+
+.premium-modal .modal-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+  letter-spacing: -0.01em;
 }
 
 .premium-content {
-  padding: var(--space-4);
+  padding: var(--space-6);
 }
 
 .premium-features {
@@ -1097,33 +1116,144 @@ x-close-button {
 .premium-features li {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-  font-size: 1rem;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  font-size: 1.05rem;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.premium-features li:hover {
+  background-color: var(--primary-50);
+  transform: translateX(var(--space-1));
 }
 
 .premium-features li svg {
   color: var(--success);
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
 }
 
 .premium-price {
-  margin: var(--space-6) 0;
+  margin: var(--space-8) 0;
   text-align: center;
+  position: relative;
+  background: linear-gradient(135deg, var(--primary-100), var(--primary-50));
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 12px rgba(74, 109, 229, 0.1);
 }
 
 .price-value {
-  font-size: 2.5rem;
-  font-weight: 700;
+  font-size: 3.5rem;
+  font-weight: 800;
   color: var(--primary-700);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+  line-height: 1;
+  display: inline-block;
+  position: relative;
+}
+
+.price-value:before {
+  content: "R$";
+  position: absolute;
+  left: -2rem;
+  top: 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--primary-600);
 }
 
 .price-period {
-  font-size: 1rem;
+  font-size: 1.1rem;
+  font-weight: 500;
   color: var(--neutral-600);
+  margin-top: var(--space-2);
+  display: block;
 }
 
 .premium-actions {
-  margin-top: var(--space-6);
+  margin-top: var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.premium-modal .btn-primary {
+  background: linear-gradient(90deg, var(--primary-600), #9779FF);
+  color: white;
+  padding: var(--space-4) var(--space-6);
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(74, 109, 229, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.premium-modal .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(74, 109, 229, 0.3);
+}
+
+.premium-modal .btn-primary:active {
+  transform: translateY(0);
+}
+
+.premium-modal .btn-primary::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  animation: shine 2s infinite;
+}
+
+@keyframes shine {
+  100% {
+    left: 100%;
+  }
+}
+
+.premium-modal .btn-secondary {
+  background-color: transparent;
+  border: none;
+  color: var(--neutral-600);
+  padding: var(--space-3);
+  font-size: 0.95rem;
+  cursor: pointer;
+  text-align: center;
+  transition: color var(--transition-fast);
+}
+
+.premium-modal .btn-secondary:hover {
+  color: var(--neutral-900);
+  text-decoration: underline;
+}
+
+.premium-benefit-tag {
+  background-color: var(--primary-600);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  margin-left: var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .w-full {
@@ -1163,4 +1293,206 @@ x-close-button {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* Estilos adicionais para o formulário de recuperação de senha */
+.auth-text-button {
+  background: none;
+  border: none;
+  color: var(--primary-600);
+  padding: 0;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.auth-text-button:hover {
+  color: var(--primary-700);
+}
+
+.auth-forgot-password {
+  text-align: right;
+  margin-bottom: var(--space-4);
+  font-size: 0.875rem;
+}
+
+/* Estilo padrão para formulários de autenticação */
+.auth-form-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-4);
+  width: 100%;
+}
+
+/* Estilo específico para o modal de recuperação de senha */
+.recovery-actions {
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.recovery-actions .auth-secondary-button {
+  flex: 0 0 auto;
+  min-width: 100px;
+}
+
+.recovery-actions .auth-primary-button {
+  flex: 1 1 auto;
+}
+
+.auth-primary-button {
+  width: 100%;
+  background-color: var(--primary-600);
+  border: none;
+  color: white;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  cursor: pointer;
+  min-width: 120px;
+  font-size: 1rem;
+}
+
+.auth-primary-button:hover {
+  background-color: var(--primary-700);
+}
+
+.auth-primary-button:disabled {
+  background-color: var(--neutral-400);
+  cursor: not-allowed;
+}
+
+.auth-secondary-button {
+  background-color: var(--neutral-100);
+  border: 1px solid var(--neutral-300);
+  color: var(--neutral-700);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.auth-secondary-button:hover {
+  background-color: var(--neutral-200);
+}
+
+.auth-toggle-mode {
+  margin-top: var(--space-6);
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--neutral-600);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Estilos para página de redefinição de senha */
+.reset-password-container {
+  max-width: 500px;
+  margin: var(--space-10) auto;
+  padding: var(--space-6);
+  background-color: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.reset-password-container h2 {
+  margin-top: 0;
+  margin-bottom: var(--space-4);
+  color: var(--primary-600);
+  text-align: center;
+  font-weight: 600;
+}
+
+.reset-password-container .form-group {
+  margin-bottom: var(--space-4);
+}
+
+.reset-password-container label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-weight: 500;
+  color: var(--neutral-700);
+}
+
+.reset-password-container input {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+}
+
+.reset-password-container .password-hint {
+  display: flex;
+  align-items: center;
+  margin-top: var(--space-2);
+  font-size: 0.75rem;
+  color: var(--neutral-500);
+}
+
+.reset-password-container .password-hint svg {
+  margin-right: var(--space-2);
+  color: var(--neutral-500);
+}
+
+.reset-password-container .error-message {
+  color: var(--error);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  background-color: rgba(239, 68, 68, 0.1);
+  border-radius: var(--radius-md);
+}
+
+.reset-password-container .submit-button {
+  width: 100%;
+  padding: var(--space-3);
+  background-color: var(--primary-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.reset-password-container .submit-button:hover {
+  background-color: var(--primary-700);
+}
+
+.reset-password-container .submit-button:disabled {
+  background-color: var(--neutral-400);
+  cursor: not-allowed;
+}
+
+.success-container, .error-container {
+  text-align: center;
+}
+
+.success-container h2 {
+  color: var(--success);
+}
+
+.error-container h2 {
+  color: var(--error);
+}
+
+.button-link {
+  display: inline-block;
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--primary-600);
+  color: white;
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+}
+
+.button-link:hover {
+  background-color: var(--primary-700);
+}
+
+/* Resultado da Avaliação */
+.resultado-avaliacao {
+  margin-top: var(--space-8);
 } 

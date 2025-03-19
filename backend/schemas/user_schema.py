@@ -58,4 +58,16 @@ class UserLogin(BaseModel):
 
 class UserInDB(User):
     """Esquema para usuários no banco de dados (inclui senha hash)"""
-    hashed_password: str 
+    hashed_password: str
+
+# Schema para recuperação de senha
+class PasswordRecovery(BaseModel):
+    """Esquema para solicitação de recuperação de senha"""
+    email: EmailStr
+    frontend_url: str = Field(..., description="URL base do frontend para redirecionar o usuário")
+
+# Schema para redefinição de senha
+class PasswordReset(BaseModel):
+    """Esquema para redefinição de senha"""
+    token: str = Field(..., description="Token de recuperação enviado por e-mail")
+    new_password: str = Field(..., min_length=8, description="Nova senha do usuário (mínimo 8 caracteres)") 

@@ -45,6 +45,10 @@ class User(Base):
     
     # Método de pagamento preferido
     preferred_payment_method = Column(String(20), nullable=True)  # PIX, CREDIT_CARD, BOLETO
+    
+    # Campos para recuperação de senha
+    reset_password_token = Column(String(255), nullable=True, index=True)
+    reset_password_expires = Column(DateTime(timezone=True), nullable=True)
 
     def verify_password(self, password: str) -> bool:
         """Verifica se a senha fornecida corresponde à senha hash armazenada"""
