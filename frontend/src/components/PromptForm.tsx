@@ -124,27 +124,6 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
       
       console.log('Verificando status free para usuário:', actualUserId);
       
-      // Primeiro, obter o número real de avaliações usadas
-      const countResponse = await fetch(`/api/usage/count/${actualUserId}`, {
-        headers: token ? {
-          'Authorization': `Bearer ${token}`
-        } : {}
-      }).catch(() => null);
-      
-      // Valor padrão para contagem de uso
-      let usedEvaluations = 0;
-      
-      if (countResponse && countResponse.ok) {
-        try {
-          const countData = await countResponse.json();
-          usedEvaluations = countData.count || 0;
-          console.log(`Usuário usou ${usedEvaluations} de ${maxFreeEvaluations} avaliações hoje`);
-        } catch (e) {
-          console.error("Erro ao processar dados de contagem:", e);
-        }
-      }
-      
-      // Verificar status gratuito
       const response = await fetch(`/free/status/${actualUserId}`, {
         headers: token ? {
           'Authorization': `Bearer ${token}`
@@ -153,7 +132,7 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
       
       if (!response.ok) {
         console.log('Erro ao verificar status gratuito, código:', response.status);
-        setEvaluationCount(usedEvaluations); // Usar a contagem obtida ou 0 como padrão
+        setEvaluationCount(0); // Nenhuma avaliação usada (permite uso) em caso de erro
         return;
       }
       
@@ -166,14 +145,28 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
         setEvaluationCount(maxFreeEvaluations); // Usuário já usou todas as avaliações
         setError('Limite diário de avaliações gratuitas atingido');
       } else {
-        // Usuário ainda pode usar o plano gratuito
-        // Usamos o contador real obtido da API de contagem ou o padrão
-        setEvaluationCount(usedEvaluations);
+        // Quando o usuário pode usar o plano gratuito, consideramos que ele tem
+        // todas as avaliações disponíveis (0 utilizadas) a menos que a API
+        // forneça explicitamente um valor diferente
+        const usedCount = data.used_evaluations !== undefined ? data.used_evaluations : 
+                        (data.evaluation_count !== undefined ? data.evaluation_count : 0);
+        
+        console.log(`Usuário pode usar plano gratuito, avaliações usadas: ${usedCount}`);
+        setEvaluationCount(usedCount);
         setError(null);
       }
     } catch (error) {
       console.error('Erro ao verificar status gratuito:', error);
-      setEvaluationCount(0); // Valor conservador em caso de erro
+      setEvaluationCount(0); // Nenhuma avaliação usada (permite uso) em caso de erro
+    }
+  };
+
+  // Após cada avaliação bem-sucedida, incrementamos o contador local
+  const incrementEvaluationCount = () => {
+    if (evaluationCount !== null && !isPremium) {
+      const newCount = evaluationCount + 1;
+      console.log(`Incrementando contador local: ${evaluationCount} -> ${newCount}`);
+      setEvaluationCount(newCount);
     }
   };
 
@@ -251,9 +244,9 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
         
         setResult(data.evaluation);
         
-        // Atualizar o contador de avaliações após avaliação bem-sucedida
+        // Atualizar o contador local após avaliação bem-sucedida
         if (!isPremium) {
-          await checkFreeStatus();
+          incrementEvaluationCount();
         }
       } else {
         throw new Error('Estrutura de resposta inválida');
@@ -306,24 +299,20 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
                   
                   // Calcular o número de avaliações restantes
                   const remaining = Math.max(0, maxFreeEvaluations - evaluationCount);
-                  
-                  // Log para debug
-                  console.log(`Avaliações: total=${maxFreeEvaluations}, usadas=${evaluationCount}, restantes=${remaining}`);
-                  
+                  console.log(`Renderizando contador: total=${maxFreeEvaluations}, usadas=${evaluationCount}, restantes=${remaining}`);
                   return `${remaining}/${maxFreeEvaluations}`;
                 })()}
                 {" "}avaliações restantes
               </span>
             )}
             
-            {!isNaN(evaluationCount) && evaluationCount >= maxFreeEvaluations / 2 && (
-              <button 
-                className="btn btn-secondary" 
-                onClick={openPremiumModal || handleOpenPremiumModal}
-              >
-                <SparkleIcon /> Comprar Premium
-              </button>
-            )}
+            {/* Sempre mostrar o botão com o contador */}
+            <button 
+              className="btn btn-secondary" 
+              onClick={openPremiumModal || handleOpenPremiumModal}
+            >
+              <SparkleIcon /> Comprar Premium
+            </button>
           </div>
         )}
         

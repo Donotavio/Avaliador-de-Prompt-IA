@@ -1495,4 +1495,15 @@ x-close-button {
 /* Resultado da Avaliação */
 .resultado-avaliacao {
   margin-top: var(--space-8);
+}
+
+/* Estilo para mensagem de erro no modal de pagamento */
+.payment-error {
+  background-color: rgba(239, 68, 68, 0.1);
+  border-left: 3px solid var(--error);
+  color: var(--error);
+  padding: var(--space-3);
+  margin: var(--space-4) 0;
+  font-size: 0.875rem;
+  border-radius: var(--radius-md);
 } 
