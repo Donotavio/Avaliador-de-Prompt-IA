@@ -2,7 +2,7 @@ from sqlalchemy import Boolean, Column, String, DateTime, Integer, Text
 from sqlalchemy.sql import func
 import uuid
 
-from database import Base
+from services.database import Base
 
 class Product(Base):
     """

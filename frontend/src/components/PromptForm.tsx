@@ -57,6 +57,7 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
   const [freeMessage, setFreeMessage] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [hasPremiumExpired, setHasPremiumExpired] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -65,6 +66,32 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
     };
     checkStatus();
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const checkUserRole = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          return;
+        }
+        
+        const response = await fetch('/api/users/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          setIsAdmin(userData.is_admin === true);
+        }
+      } catch (error) {
+        console.error('Erro ao verificar permissões:', error);
+      }
+    };
+    
+    checkUserRole();
+  }, []);
 
   const showMessage = (message: string, type: 'success' | 'error' | 'warning') => {
     if (type === 'error') {
@@ -77,16 +104,28 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
 
   const checkPremiumStatus = async () => {
     try {
-      const response = await fetch(`/premium/status/${userId}`);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setCanUsePremium(false);
+        setPremiumMessage('Login necessário para acesso premium');
+        return;
+      }
+      
+      const response = await fetch(`/premium/status/${userId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
       if (!response.ok) {
         throw new Error('Erro ao verificar status premium');
       }
+      
       const data = await response.json();
       setCanUsePremium(data.can_use);
       setPremiumMessage(data.message);
       setHasPremiumExpired(data.has_expired);
       
-      // Mostrar modal se o limite de ativações premium foi atingido
       if (data.has_expired && data.message.includes('Limite de ativações premium atingido')) {
         setIsModalOpen(true);
       }
@@ -100,10 +139,23 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
 
   const checkFreeStatus = async () => {
     try {
-      const response = await fetch(`/free/status/${userId}`);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setCanUseFree(false);
+        setFreeMessage('Login necessário para usar o sistema');
+        return;
+      }
+      
+      const response = await fetch(`/free/status/${userId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
       if (!response.ok) {
         throw new Error('Falha ao verificar status gratuito');
       }
+      
       const data = await response.json();
       setCanUseFree(data.can_use_free);
       setFreeMessage(data.message);
@@ -176,7 +228,6 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
 
       const data = await response.json();
       
-      // Log da resposta para debug
       console.log('Resposta API completa:', data);
 
       if (!response.ok) {
@@ -186,7 +237,6 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
         throw new Error(data.detail || 'Erro ao avaliar o prompt');
       }
 
-      // Extrair evaluation explicitamente da resposta
       if (data && data.evaluation) {
         console.log('Scores recebidos:', data.evaluation.clarity_score, data.evaluation.context_score, data.evaluation.effectiveness_score);
         console.log('Análise detalhada recebida:', data.evaluation.detailed_analysis);
@@ -297,18 +347,6 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
               {isLoading ? <><div className="spinner"></div>Avaliando...</> : <><SendIcon />Avaliar Prompt</>}
             </button>
             
-            {!canUsePremium && !hasPremiumExpired && (
-              <button
-                type="button"
-                className="premium-button"
-                onClick={activatePremium}
-                disabled={isLoading}
-              >
-                <SparkleIcon />
-                Ativar Premium
-              </button>
-            )}
-
             {hasPremiumExpired && (
               <button
                 type="button"
@@ -321,15 +359,17 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
               </button>
             )}
             
-            <button
-              type="button"
-              className="reset-button"
-              onClick={resetUsage}
-              disabled={isLoading}
-            >
-              <ResetIcon />
-              Resetar Uso
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                className="reset-button"
+                onClick={resetUsage}
+                disabled={isLoading}
+              >
+                <ResetIcon />
+                Resetar Uso (Admin)
+              </button>
+            )}
           </div>
         </form>
       </div>

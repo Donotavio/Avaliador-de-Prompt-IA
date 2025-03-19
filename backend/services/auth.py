@@ -8,7 +8,7 @@ import os
 from dotenv import load_dotenv
 
 from models.user import User
-from database import get_db
+from services.database import get_db
 from schemas.token_schema import TokenData
 
 # Carrega variáveis de ambiente

@@ -4,7 +4,7 @@ from sqlalchemy.orm import relationship
 import uuid
 from datetime import datetime
 
-from database import Base
+from services.database import Base
 
 class Subscription(Base):
     __tablename__ = "subscriptions"

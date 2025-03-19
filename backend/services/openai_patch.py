@@ -5,6 +5,10 @@ Este arquivo deve ser importado antes de importar a biblioteca OpenAI.
 Exemplo de uso:
     import openai_patch
     from openai import OpenAI
+
+Patch para compatibilidade com a biblioteca OpenAI.
+
+Este módulo aplica um patch para tornar a biblioteca OpenAI compatível com a versão mais recente.
 """
 
 import os
@@ -104,4 +108,16 @@ try:
 except ImportError:
     print("OpenAI não foi importado ainda. O patch só funcionará se este módulo for importado primeiro.")
 except Exception as e:
-    print(f"Erro ao aplicar patch na OpenAI: {str(e)}") 
+    print(f"Erro ao aplicar patch na OpenAI: {str(e)}")
+
+def apply_patch():
+    """
+    Função que aplica o patch para compatibilidade com a biblioteca OpenAI.
+    Isso não é mais necessário com a versão mais recente da OpenAI, mas
+    mantemos a função para evitar quebras no código existente.
+    """
+    print("OpenAI patch aplicado (não necessário para as versões mais recentes)")
+    return True
+
+# Aplicar o patch automaticamente ao importar o módulo
+apply_patch() 

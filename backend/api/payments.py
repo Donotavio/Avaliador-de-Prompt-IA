@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 
-from database import get_db
+from services.database import get_db
 from models.user import User
 from models.product import Product
 from models.subscription import Subscription

@@ -6,7 +6,7 @@ from typing import Any, Dict
 import logging
 import re
 
-from database import get_db
+from services.database import get_db
 from models.user import User
 from schemas.user_schema import UserCreate, User as UserSchema
 from schemas.token_schema import Token
@@ -37,12 +37,18 @@ def format_phone(value: str) -> str:
         return cleaned
     return cleaned
 
-@router.get("/me", response_model=UserSchema)
-async def get_current_user_profile(current_user: User = Depends(get_current_user)) -> Any:
+@router.get("/me")
+async def read_users_me(current_user: User = Depends(get_current_user)):
     """
-    Retorna o perfil do usuário atualmente logado
+    Retorna o perfil do usuário autenticado
     """
-    return current_user
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "is_active": current_user.is_active,
+        "is_admin": current_user.is_admin
+    }
 
 @router.post("/register", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
 def register(user_data: UserCreate, db: Session = Depends(get_db)) -> Any:

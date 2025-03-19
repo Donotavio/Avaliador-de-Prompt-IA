@@ -4,7 +4,7 @@ from passlib.context import CryptContext
 import uuid
 from datetime import datetime
 
-from database import Base
+from services.database import Base
 
 # Contexto para encriptar senhas com mais opções e configurações de fallback
 pwd_context = CryptContext(

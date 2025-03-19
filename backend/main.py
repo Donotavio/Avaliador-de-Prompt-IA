@@ -6,7 +6,7 @@ principais e middleware necessários.
 """
 
 # Importa o patch para OpenAI antes de qualquer outra coisa
-import openai_patch
+import services.openai_patch as openai_patch
 
 from fastapi import FastAPI, HTTPException, Request, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,7 +23,7 @@ from services.usage_manager import usage_manager
 from utils.logger import logger
 
 # Importação para sistema de usuários e pagamentos
-from database import Base, engine, get_db
+from services.database import Base, engine, get_db
 from api import auth, users, payments, products
 from models.user import User
 from services.auth import get_current_user, get_current_admin_user
@@ -116,82 +116,90 @@ async def evaluate_prompt(request: PromptRequest):
         raise HTTPException(status_code=500, detail="Erro interno ao avaliar prompt")
 
 
-@app.post("/premium/activate/{user_id}")
-async def activate_premium(user_id: str):
-    """
-    Ativa o plano premium para um usuário.
-
-    Args:
-        user_id: ID do usuário
-
-    Returns:
-        dict: Mensagem de sucesso
-    """
-    try:
-        logger.info(f"Ativando plano premium para usuário: {user_id}")
-        usage_manager.activate_premium(user_id)
-        logger.info("Plano premium ativado com sucesso")
-        return {"message": "Plano premium ativado com sucesso"}
-    except Exception as e:
-        logger.error(f"Erro ao ativar plano premium: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/premium/status/{user_id}")
-def check_premium_status(user_id: str):
+async def check_premium_status(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
     """
-    Verifica o status do plano premium do usuário.
+    Verifica o status do plano premium de um usuário.
+    Requer autenticação de usuário.
 
     Args:
         user_id: ID do usuário
+        current_user: Usuário autenticado
 
     Returns:
-        dict: Status do usuário incluindo se pode usar, mensagem e se expirou
+        dict: Status do plano premium
     """
+    # Garantir que o usuário só pode verificar seu próprio status
+    if current_user.id != user_id and not current_user.is_admin:
+        raise HTTPException(
+            status_code=403, 
+            detail="Você só pode verificar seu próprio status premium"
+        )
+        
     try:
         logger.info(f"Verificando status premium do usuário: {user_id}")
         can_use, message, has_expired = usage_manager.can_use_premium(user_id)
-        logger.info(f"Status premium verificado: {can_use}")
+        logger.info(f"Status premium: {can_use}, Mensagem: {message}")
         return {"can_use": can_use, "message": message, "has_expired": has_expired}
     except Exception as e:
         logger.error(f"Erro ao verificar status premium: {str(e)}")
-        raise HTTPException(status_code=500, detail="Erro ao verificar status premium")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/free/status/{user_id}")
-async def check_free_status(user_id: str):
+async def check_free_status(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
     """
-    Verifica o status gratuito de um usuário.
+    Verifica o status do plano gratuito de um usuário.
+    Requer autenticação de usuário.
 
     Args:
         user_id: ID do usuário
+        current_user: Usuário autenticado
 
     Returns:
-        dict: Status do usuário
+        dict: Status do plano gratuito
     """
+    # Garantir que o usuário só pode verificar seu próprio status
+    if current_user.id != user_id and not current_user.is_admin:
+        raise HTTPException(
+            status_code=403, 
+            detail="Você só pode verificar seu próprio status"
+        )
+        
     try:
         logger.info(f"Verificando status gratuito do usuário: {user_id}")
-        can_use, message = usage_manager.can_use_free(user_id)
-        logger.info(f"Status gratuito verificado: {can_use}")
-        return {"can_use_free": can_use, "message": message}
+        can_use_free, message = usage_manager.can_use_free(user_id)
+        logger.info(f"Status gratuito: {can_use_free}, Mensagem: {message}")
+        return {"can_use_free": can_use_free, "message": message}
     except Exception as e:
         logger.error(f"Erro ao verificar status gratuito: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/reset/{user_id}")
-async def reset_usage(user_id: str):
+async def reset_usage(
+    user_id: str, 
+    current_user: User = Depends(get_current_admin_user)
+):
     """
     Reseta o uso premium de um usuário.
+    Requer privilégios de administrador.
 
     Args:
         user_id: ID do usuário
+        current_user: Usuário administrador autenticado
 
     Returns:
         dict: Mensagem de sucesso
     """
     try:
-        logger.info(f"Resetando uso do usuário: {user_id}")
+        logger.info(f"Admin {current_user.id} resetando uso do usuário: {user_id}")
         usage_manager.reset_premium_usage(user_id)
         logger.info("Uso resetado com sucesso")
         return {"message": "Uso resetado com sucesso"}

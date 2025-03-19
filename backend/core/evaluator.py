@@ -6,7 +6,7 @@ de acordo com critérios predefinidos.
 """
 
 # Importa o patch para OpenAI antes de qualquer outra coisa
-import openai_patch
+import services.openai_patch as openai_patch
 
 import os
 import re
