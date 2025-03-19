@@ -85,6 +85,11 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
       setCanUsePremium(data.can_use);
       setPremiumMessage(data.message);
       setHasPremiumExpired(data.has_expired);
+      
+      // Mostrar modal se o limite de ativações premium foi atingido
+      if (data.has_expired && data.message.includes('Limite de ativações premium atingido')) {
+        setIsModalOpen(true);
+      }
     } catch (error) {
       console.error('Erro ao verificar status premium:', error);
       setPremiumMessage('Não foi possível verificar o status premium');
@@ -184,6 +189,7 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
       // Extrair evaluation explicitamente da resposta
       if (data && data.evaluation) {
         console.log('Scores recebidos:', data.evaluation.clarity_score, data.evaluation.context_score, data.evaluation.effectiveness_score);
+        console.log('Análise detalhada recebida:', data.evaluation.detailed_analysis);
         setEvaluation(data.evaluation);
       } else {
         throw new Error('Estrutura de resposta inválida');
@@ -335,7 +341,10 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId }) => {
       )}
 
       {isModalOpen && (
-        <PremiumModal onClose={() => setIsModalOpen(false)} />
+        <PremiumModal 
+          onClose={() => setIsModalOpen(false)} 
+          refreshPage={true}
+        />
       )}
     </>
   );

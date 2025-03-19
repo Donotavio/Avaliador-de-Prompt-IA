@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import '../styles/EvaluationResult.css';
+import DetailedAnalysis from './DetailedAnalysis';
 
 interface EvaluationResultProps {
   result: {
@@ -17,6 +18,14 @@ interface EvaluationResultProps {
     clarity_score?: number;
     context_score?: number;
     effectiveness_score?: number;
+    // Adicionando campos da análise detalhada
+    detailed_analysis?: {
+      central_objective?: string;
+      strengths_weaknesses?: string;
+      context?: string;
+      practical_suggestions?: string;
+      ethical_practices?: string;
+    };
   };
 }
 
@@ -57,7 +66,7 @@ const EvaluationResult: React.FC<EvaluationResultProps> = ({ result }) => {
   const directEffectiveness = typeof result.effectiveness_score === 'number' ? result.effectiveness_score : undefined;
 
   // Extrair de scores (compatibilidade com estrutura anterior)
-  const { scores = {}, suggestions = [], optimized_prompt = '', improved_versions = [], premium_status } = result;
+  const { scores = {}, suggestions = [], optimized_prompt = '', improved_versions = [], premium_status, detailed_analysis = {} } = result;
   
   // Usar valores diretos se disponíveis, caso contrário usar os de scores
   const clarity = directClarity !== undefined ? directClarity : scores.clarity ?? 0;
@@ -107,6 +116,15 @@ const EvaluationResult: React.FC<EvaluationResultProps> = ({ result }) => {
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12"></polyline>
     </svg>
+  );
+
+  // Verifica se há análise detalhada
+  const hasDetailedAnalysis = detailed_analysis && (
+    detailed_analysis.central_objective || 
+    detailed_analysis.strengths_weaknesses || 
+    detailed_analysis.context || 
+    detailed_analysis.practical_suggestions || 
+    detailed_analysis.ethical_practices
   );
 
   return (
@@ -173,6 +191,8 @@ const EvaluationResult: React.FC<EvaluationResultProps> = ({ result }) => {
           </div>
         </div>
       )}
+
+      {hasDetailedAnalysis && <DetailedAnalysis analysis={detailed_analysis} />}
 
       {improved_versions && improved_versions.length > 0 && (
         <div className="improved-versions-section">

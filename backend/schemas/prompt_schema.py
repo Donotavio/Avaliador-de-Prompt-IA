@@ -50,6 +50,7 @@ class PromptEvaluation(BaseModel):
         effectiveness_score: Pontuação de eficácia
         suggestions: Lista de sugestões de melhoria
         optimized_prompt: Versão otimizada do prompt
+        detailed_analysis: Análise detalhada do prompt
     """
 
     clarity_score: float = Field(
@@ -65,6 +66,9 @@ class PromptEvaluation(BaseModel):
         ..., description="Lista de sugestões para melhorar o prompt"
     )
     optimized_prompt: str = Field(..., description="Versão otimizada do prompt")
+    detailed_analysis: Optional[dict] = Field(
+        None, description="Análise detalhada do prompt, incluindo objetivo central, pontos fortes e fracos, etc."
+    )
 
 
 class PromptRequest(PromptBase):

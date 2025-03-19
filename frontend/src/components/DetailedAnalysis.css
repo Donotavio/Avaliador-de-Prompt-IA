@@ -1,0 +1,74 @@
+.detailed-analysis {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.detailed-analysis h2 {
+  color: #333;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #3f51b5;
+  font-size: 1.5rem;
+}
+
+.analysis-section {
+  margin-bottom: 20px;
+}
+
+.analysis-section h3 {
+  color: #3f51b5;
+  margin-bottom: 10px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+}
+
+.analysis-section h3::before {
+  content: "•";
+  color: #3f51b5;
+  font-size: 1.5rem;
+  margin-right: 10px;
+}
+
+.analysis-content {
+  background-color: white;
+  padding: 15px;
+  border-radius: 6px;
+  border-left: 4px solid #3f51b5;
+}
+
+.analysis-content p {
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+
+.analysis-content a {
+  color: #2196f3;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.analysis-content a:hover {
+  text-decoration: underline;
+}
+
+/* Estilo específico para links do Databricks */
+.analysis-content a[href*="databricks"] {
+  font-weight: 500;
+  color: #ff5722;
+}
+
+/* Melhorar exibição em dispositivos móveis */
+@media (max-width: 768px) {
+  .detailed-analysis {
+    padding: 15px;
+  }
+  
+  .analysis-content {
+    padding: 10px;
+  }
+} 

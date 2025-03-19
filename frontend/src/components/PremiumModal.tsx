@@ -2,12 +2,25 @@ import React from 'react';
 
 interface PremiumModalProps {
   onClose: () => void;
+  refreshPage?: boolean;
 }
 
-const PremiumModal: React.FC<PremiumModalProps> = ({ onClose }) => {
+const PremiumModal: React.FC<PremiumModalProps> = ({ onClose, refreshPage = false }) => {
   const handlePurchase = () => {
     // Aqui implementaremos a integração com o sistema de pagamento
     window.open('https://buy.stripe.com/test_yourlink', '_blank');
+  };
+
+  const handleContinueFree = () => {
+    // Primeiro fecha o modal
+    onClose();
+    
+    // Depois recarrega a página com um pequeno atraso
+    if (refreshPage) {
+      setTimeout(() => {
+        window.location.reload();
+      }, 100); // Pequeno atraso para garantir que o React atualize o estado
+    }
   };
 
   return (
@@ -29,7 +42,7 @@ const PremiumModal: React.FC<PremiumModalProps> = ({ onClose }) => {
           <button className="premium-button" onClick={handlePurchase}>
             Assinar Agora
           </button>
-          <button className="cancel-button" onClick={onClose}>
+          <button className="cancel-button" onClick={handleContinueFree}>
             Continuar no Plano Gratuito
           </button>
         </div>
