@@ -1,5 +1,6 @@
 import os
 import requests
+import re
 from typing import Dict, Any, Optional
 from fastapi import HTTPException, status
 from dotenv import load_dotenv
@@ -10,6 +11,72 @@ load_dotenv()
 # Configurações AbacatePay
 GATEWAY_URL = os.getenv("GATEWAY_URL", "https://api.abacatepay.com/v1")
 GATEWAY_SECRET_KEY = os.getenv("GATEWAY_SECRET_KEY")
+
+def validate_cpf(cpf: str) -> bool:
+    """
+    Valida se o CPF está no formato correto e se é um CPF válido
+    
+    Args:
+        cpf: CPF a ser validado
+        
+    Returns:
+        True se o CPF for válido, False caso contrário
+    """
+    # Remove caracteres não numéricos
+    cpf = re.sub(r'\D', '', cpf)
+    
+    # Verifica se o CPF tem 11 dígitos
+    if len(cpf) != 11:
+        return False
+    
+    # Verifica se todos os dígitos são iguais, o que torna o CPF inválido
+    if cpf == cpf[0] * 11:
+        return False
+    
+    # Calcula o primeiro dígito verificador
+    soma = 0
+    for i in range(9):
+        soma += int(cpf[i]) * (10 - i)
+    resto = soma % 11
+    if resto < 2:
+        dv1 = 0
+    else:
+        dv1 = 11 - resto
+    
+    # Verifica o primeiro dígito verificador
+    if int(cpf[9]) != dv1:
+        return False
+    
+    # Calcula o segundo dígito verificador
+    soma = 0
+    for i in range(10):
+        soma += int(cpf[i]) * (11 - i)
+    resto = soma % 11
+    if resto < 2:
+        dv2 = 0
+    else:
+        dv2 = 11 - resto
+    
+    # Verifica o segundo dígito verificador
+    if int(cpf[10]) != dv2:
+        return False
+    
+    return True
+
+def format_cpf(cpf: str) -> str:
+    """
+    Formata o CPF para o formato esperado pela API (apenas números)
+    
+    Args:
+        cpf: CPF a ser formatado
+        
+    Returns:
+        CPF formatado
+    """
+    # Remove caracteres não numéricos
+    cpf = re.sub(r'\D', '', cpf)
+    
+    return cpf
 
 class AbacatePayClient:
     """
@@ -111,6 +178,19 @@ class AbacatePayClient:
                     error_msg = f"Email inválido no objeto customer: {email}"
                     print(error_msg)
                     return {"error": error_msg}
+                
+                # Valida e formata o CPF/CNPJ
+                if "taxId" in data["customer"]:
+                    tax_id = data["customer"]["taxId"]
+                    
+                    # Se não for um CPF válido e estamos em desenvolvimento, use um CPF válido
+                    if not validate_cpf(tax_id) and data.get("devMode", False):
+                        print(f"CPF inválido ({tax_id}), substituindo por um CPF válido para testes")
+                        # CPF válido para ambientes de teste AbacatePay
+                        data["customer"]["taxId"] = "00000000191"
+                    else:
+                        # Formata o CPF para apenas números
+                        data["customer"]["taxId"] = format_cpf(tax_id)
             
             # Verifica produtos
             if not data.get("products") or len(data["products"]) < 1:
@@ -188,26 +268,30 @@ class AbacatePayClient:
         Returns:
             Dict com a resposta da API contendo as informações do pagamento
         """
-        # Primeiro, tenta o endpoint baseado no prefixo do ID
-        if payment_id.startswith('bill_'):
-            primary_endpoint = f"{self.base_url}/invoices/{payment_id}"
-            backup_endpoint = f"{self.base_url}/bills/{payment_id}"
-        else:
-            primary_endpoint = f"{self.base_url}/bills/{payment_id}"
-            backup_endpoint = f"{self.base_url}/invoices/{payment_id}"
+        # Endpoint correto para o AbacatePay de acordo com a documentação
+        api_endpoint = f"{self.base_url}/billing/{payment_id}"
         
         try:
             # Faz a requisição para a API
-            response = requests.get(primary_endpoint, headers=self.headers)
+            response = requests.get(api_endpoint, headers=self.headers)
             
             # Verifica a resposta e loga para debug
             print(f"AbacatePay Payment Details Response: Status={response.status_code}, Headers={response.headers}, Data={response.text}")
             
-            # Se retornou 404, tenta o endpoint alternativo
+            # Se retornou 404, tenta os endpoints alternativos
             if response.status_code == 404:
-                print(f"Tentando endpoint alternativo: {backup_endpoint}")
-                response = requests.get(backup_endpoint, headers=self.headers)
+                # Tenta outro formato de endpoint
+                alternate_endpoint = f"{self.base_url}/bills/{payment_id}"
+                print(f"Tentando endpoint alternativo: {alternate_endpoint}")
+                response = requests.get(alternate_endpoint, headers=self.headers)
                 print(f"AbacatePay Alternative Endpoint Response: Status={response.status_code}, Headers={response.headers}, Data={response.text}")
+                
+                # Tenta um terceiro formato se necessário
+                if response.status_code == 404:
+                    alternate_endpoint = f"{self.base_url}/invoices/{payment_id}"
+                    print(f"Tentando terceiro endpoint: {alternate_endpoint}")
+                    response = requests.get(alternate_endpoint, headers=self.headers)
+                    print(f"AbacatePay Third Endpoint Response: Status={response.status_code}, Headers={response.headers}, Data={response.text}")
             
             # Verifica se a resposta foi bem-sucedida
             if response.status_code != 200:

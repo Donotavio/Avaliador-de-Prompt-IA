@@ -56,6 +56,13 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)) -> Any:
     Registra um novo usuário e cria cliente no AbacatePay
     """
     try:
+        # Verifica se o email está em um formato válido
+        if "@" not in user_data.email or "." not in user_data.email.split("@")[1]:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Email inválido. Informe um endereço de email no formato correto (ex: nome@dominio.com)"
+            )
+        
         # Verifica se o email já está em uso
         db_user = db.query(User).filter(User.email == user_data.email).first()
         if db_user:

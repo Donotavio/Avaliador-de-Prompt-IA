@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import './PaymentForm.css';
+import { AlertIcon } from './Icons';
 
 interface PaymentFormProps {
   onClose: () => void;
   onSuccess: (checkoutUrl: string) => void;
+  onError?: (error: string) => void;
 }
 
+// Interface para produto na aplicação
 interface Product {
   id: string;
   name: string;
@@ -14,8 +16,23 @@ interface Product {
   external_id: string;
 }
 
-const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
+// Interface para produto recebido da API
+interface ApiProduct {
+  id: string;
+  name: string;
+  description: string;
+  price?: number;
+  price_in_cents?: number;
+  external_id: string;
+  active?: boolean;
+  recurrence_period_days?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, onError }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingUserData, setIsLoadingUserData] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string>('');
@@ -33,9 +50,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
   });
   
   const paymentMethods = [
-    { id: 'PIX', name: 'PIX' },
-    { id: 'CREDIT_CARD', name: 'Cartão de Crédito' },
-    { id: 'BOLETO', name: 'Boleto Bancário' }
+    { id: 'PIX', name: 'PIX' }
   ];
 
   // Buscar produtos ativos quando o componente carregar
@@ -52,12 +67,22 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
           throw new Error('Erro ao buscar produtos');
         }
 
-        const data = await response.json();
-        setProducts(data);
+        const data = await response.json() as ApiProduct[];
+        
+        // Garante que o preço esteja no formato correto (em centavos)
+        const productsWithFormattedPrice: Product[] = data.map((product: ApiProduct) => ({
+          id: product.id,
+          name: product.name,
+          description: product.description,
+          price: product.price_in_cents || product.price || 0,
+          external_id: product.external_id
+        }));
+        
+        setProducts(productsWithFormattedPrice);
 
         // Define o primeiro produto como selecionado por padrão
-        if (data.length > 0) {
-          setSelectedProductId(data[0].id);
+        if (productsWithFormattedPrice.length > 0) {
+          setSelectedProductId(productsWithFormattedPrice[0].id);
         }
       } catch (error) {
         console.error('Erro ao buscar produtos:', error);
@@ -77,6 +102,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
           return;
         }
         
+        setIsLoadingUserData(true);
         const response = await fetch('/api/users/me/payment-info', {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -92,22 +118,26 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
         // Preenche o formulário com os dados salvos
         setFormData(prevData => ({
           ...prevData,
-          taxId: userData.taxId || '',
-          cellphone: userData.phone || '',
+          taxId: userData.taxId || userData.tax_id || '',
+          cellphone: userData.phone || userData.cellphone || '',
           address: userData.address || '',
-          addressNumber: userData.addressNumber || '',
+          addressNumber: userData.addressNumber || userData.address_number || '',
           complement: userData.complement || '',
           neighborhood: userData.neighborhood || '',
           city: userData.city || '',
           state: userData.state || '',
-          postalCode: userData.postalCode || '',
-          paymentMethod: userData.preferredPaymentMethod || 'PIX'
+          postalCode: userData.postalCode || userData.postal_code || '',
+          paymentMethod: userData.preferredPaymentMethod || userData.preferred_payment_method || 'PIX'
         }));
         
         console.log('Dados do usuário carregados com sucesso');
       } catch (error) {
         console.error('Erro ao carregar dados do usuário:', error);
-        // Não exibimos erro para o usuário, apenas log para debug
+        // Exibimos um erro mais amigável para o usuário
+        setError('Não foi possível carregar seus dados salvos. Você pode preenchê-los manualmente.');
+        setTimeout(() => setError(null), 5000); // Remove a mensagem após 5 segundos
+      } finally {
+        setIsLoadingUserData(false);
       }
     };
     
@@ -181,26 +211,135 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
     }).slice(0, 9);
   };
 
+  // Validação de CPF simples
+  const isValidCPF = (cpf: string) => {
+    // Remove caracteres não numéricos
+    const cleanCPF = cpf.replace(/\D/g, '');
+    
+    // Verifica se tem 11 dígitos
+    if (cleanCPF.length !== 11) {
+      return false;
+    }
+    
+    // Verifica se todos os dígitos são iguais (CPF inválido, mas com formato correto)
+    if (/^(\d)\1{10}$/.test(cleanCPF)) {
+      return false;
+    }
+    
+    // Para uma validação básica, apenas verificamos o comprimento
+    // Em uma aplicação real, você deve implementar o algoritmo completo de validação
+    return true;
+  };
+
+  // Atualizar o tratamento de erros para usar a função onError quando disponível
+  const handleError = (errorMessage: string) => {
+    setError(errorMessage);
+    if (onError) {
+      onError(errorMessage);
+    }
+  };
+
+  // Função auxiliar para criar pagamento diretamente no AbacatePay
+  const createDirectPayment = async (token: string, paymentData: any) => {
+    // Mapear os dados do formulário para o formato esperado pelo AbacatePay
+    const abacatePayData = {
+      frequency: 'ONE_TIME',
+      methods: [paymentData.payment_method],
+      products: [{
+        externalId: 'premium-plan',
+        name: 'Assinatura Premium',
+        description: 'Acesso ilimitado à avaliação de prompts por 30 dias',
+        quantity: 1,
+        price: 4990
+      }],
+      customer: {
+        name: paymentData.user_data.name,
+        email: paymentData.user_data.email,
+        taxId: paymentData.user_data.tax_id,
+        cellphone: paymentData.user_data.cellphone
+      },
+      // URLs simples sem parâmetros dinâmicos
+      returnUrl: window.location.origin,
+      completionUrl: window.location.origin,
+      webhookUrl: window.location.origin + '/api/webhook',
+      devMode: true
+    };
+    
+    // Enviar para o endpoint de proxy que não vai modificar as URLs
+    const response = await fetch('/api/payments/proxy', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(abacatePayData)
+    });
+    
+    return response;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setIsLoading(true);
+    setError('');
 
-    // Validação básica
-    if (!formData.taxId || formData.taxId.length < 11) {
-      setError('CPF/CNPJ inválido');
+    // Validação básica dos campos
+    if (!selectedProductId) {
+      handleError('Selecione um plano');
       setIsLoading(false);
       return;
     }
-
+    
+    if (!formData.paymentMethod) {
+      handleError('Selecione um método de pagamento');
+      setIsLoading(false);
+      return;
+    }
+    
+    if (!formData.taxId || !isValidCPF(formData.taxId)) {
+      handleError('CPF inválido');
+      setIsLoading(false);
+      return;
+    }
+    
     if (!formData.cellphone || formData.cellphone.length < 10) {
-      setError('Telefone celular inválido');
+      handleError('Telefone celular é obrigatório');
+      setIsLoading(false);
+      return;
+    }
+    
+    if (!formData.address) {
+      handleError('Endereço é obrigatório');
+      setIsLoading(false);
+      return;
+    }
+    
+    if (!formData.addressNumber) {
+      handleError('Número é obrigatório');
+      setIsLoading(false);
+      return;
+    }
+    
+    if (!formData.neighborhood) {
+      handleError('Bairro é obrigatório');
+      setIsLoading(false);
+      return;
+    }
+    
+    if (!formData.city) {
+      handleError('Cidade é obrigatória');
+      setIsLoading(false);
+      return;
+    }
+    
+    if (!formData.state) {
+      handleError('Estado é obrigatório');
       setIsLoading(false);
       return;
     }
     
     if (!formData.postalCode || formData.postalCode.length < 8) {
-      setError('CEP é obrigatório');
+      handleError('CEP é obrigatório');
       setIsLoading(false);
       return;
     }
@@ -209,7 +348,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
       // Obtém o token do localStorage
       const token = localStorage.getItem('token');
       if (!token) {
-        setError('Usuário não autenticado');
+        handleError('Usuário não autenticado');
         setIsLoading(false);
         return;
       }
@@ -217,166 +356,227 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
       // Prepara os dados para enviar
       const paymentData = {
         product_id: selectedProductId,
-        payment_method: formData.paymentMethod,
+        payment_method: 'PIX',  // Sempre utiliza PIX independente do valor no formData
+        // Sinalizador para o backend não modificar URLs
+        use_raw_urls: true,
+        // URLs simples sem parâmetros - isso deve ser enviado para API diretamente
+        return_url: window.location.origin,
+        completion_url: window.location.origin,
+        webhook_url: window.location.origin + '/api/webhook',
+        // Modo de desenvolvimento para testes
+        dev_mode: true,
         user_data: {
-          taxId: formData.taxId.replace(/\D/g, ''), // Remove caracteres não numéricos
-          cellphone: formData.cellphone.replace(/\D/g, ''), // Remove caracteres não numéricos
-          address: formData.address,
-          addressNumber: formData.addressNumber,
-          complement: formData.complement,
-          neighborhood: formData.neighborhood,
-          city: formData.city,
-          state: formData.state,
-          postalCode: formData.postalCode.replace(/\D/g, '')
+          name: localStorage.getItem('userName') || 'Cliente',
+          email: localStorage.getItem('userEmail') || '',
+          tax_id: formData.taxId.replace(/\D/g, ''),
+          cellphone: formData.cellphone.replace(/\D/g, ''),
+          // Campos de endereço no formato que o backend espera
+          address_street: formData.address,
+          address_number: formData.addressNumber,
+          address_complement: formData.complement || '',
+          address_neighborhood: formData.neighborhood,
+          address_city: formData.city,
+          address_state: formData.state,
+          address_country: 'BR',
+          address_zip_code: formData.postalCode.replace(/\D/g, '')
         }
       };
 
-      // Envia solicitação para criar pagamento
-      const response = await fetch('/api/payments/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(paymentData)
-      });
+      console.log('Enviando dados de pagamento:', paymentData);
 
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.detail || 'Erro ao processar pagamento');
-      }
-
-      console.log('Pagamento criado:', data);
-      
-      // Verifica se recebemos a URL de checkout
-      if (data.checkout_url) {
-        // Redireciona diretamente para a URL de checkout, independente do método de pagamento
-        onSuccess(data.checkout_url);
-      } else {
-        throw new Error('URL de pagamento não encontrada na resposta');
+      // Tenta primeiro o caminho padrão do backend
+      let response;
+      try {
+        response = await fetch('/api/payments/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(paymentData)
+        });
+        
+        const data = await response.json();
+        
+        // Se obteve sucesso, prossegue normalmente
+        if (response.ok) {
+          console.log('Pagamento criado com sucesso:', data);
+          if (data.checkout_url) {
+            onSuccess(data.checkout_url);
+            return;
+          }
+        } 
+        // Se falhou devido a erro de URL
+        else if (data.detail && 
+          (data.detail.includes('completionUrl must match format') || 
+           data.detail.includes('must match format "uri"') || 
+           data.detail.includes('FST_ERR_VALIDATION'))) {
+          
+          console.log('Erro de validação de URL, tentando método alternativo');
+          
+          // Tenta via endpoint proxy que não manipula as URLs
+          const directResponse = await createDirectPayment(token, paymentData);
+          const directData = await directResponse.json();
+          
+          if (directResponse.ok && directData.checkout_url) {
+            console.log('Pagamento criado com método alternativo:', directData);
+            onSuccess(directData.checkout_url);
+            return;
+          } else {
+            console.error('Método alternativo também falhou:', directData);
+            throw new Error('Não foi possível processar o pagamento após múltiplas tentativas');
+          }
+        } 
+        // Outros erros do backend
+        else {
+          console.error('Erro no backend:', data);
+          throw new Error(data.detail || 'Erro ao processar pagamento');
+        }
+      } catch (error) {
+        console.error('Erro ao processar pagamento:', error);
+        
+        // Extrair a mensagem de erro
+        let errorMessage = 'Erro ao processar pagamento';
+        
+        if (error instanceof Error) {
+          errorMessage = error.message;
+          
+          // Verificar se é um erro específico de SQL/banco de dados
+          if (errorMessage.includes('SQL syntax') || errorMessage.includes('MariaDB') || errorMessage.includes('ProgrammingError')) {
+            errorMessage = 'Erro no sistema ao salvar seus dados. Nossa equipe foi notificada.';
+            console.error('Erro de SQL detectado:', error);
+          }
+        }
+        
+        handleError(errorMessage);
+      } finally {
+        setIsLoading(false);
       }
     } catch (error) {
-      console.error('Erro:', error);
-      setError(error instanceof Error ? error.message : 'Erro ao processar pagamento');
-    } finally {
-      setIsLoading(false);
+      console.error('Erro ao processar pagamento:', error);
+      
+      // Extrair a mensagem de erro
+      let errorMessage = 'Erro ao processar pagamento';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        
+        // Verificar se é um erro específico de SQL/banco de dados
+        if (errorMessage.includes('SQL syntax') || errorMessage.includes('MariaDB') || errorMessage.includes('ProgrammingError')) {
+          errorMessage = 'Erro no sistema ao salvar seus dados. Nossa equipe foi notificada.';
+          console.error('Erro de SQL detectado:', error);
+        }
+      }
+      
+      handleError(errorMessage);
     }
   };
 
   return (
-    <div className="payment-form-container">
-      <h2>Concluir Assinatura</h2>
-      <p>Complete seu cadastro para finalizar a assinatura</p>
-      
-      {error && <div className="payment-error">{error}</div>}
-      
-      <form onSubmit={handleSubmit}>
-        <div className="form-section">
-          <h3>Selecione seu plano</h3>
-          <div className="product-selection">
-            {products.length === 0 ? (
-              <p>Carregando planos disponíveis...</p>
-            ) : (
-              products.map(product => (
+    <div className="payment-form">
+      <div className="modal-header">
+        <h2>Pagamento</h2>
+        <button className="modal-close-btn" onClick={onClose}>×</button>
+      </div>
+
+      <div className="modal-content">
+        <h3>Concluir Assinatura</h3>
+        <p className="modal-subtitle">Complete seu cadastro para finalizar a assinatura</p>
+        
+        <div className="plan-info">
+          <h4>Selecione seu plano</h4>
+          {products.length > 0 ? (
+            <div className="plan-options">
+              {products.map(product => (
                 <div 
-                  key={product.id} 
-                  className={`product-card ${selectedProductId === product.id ? 'selected' : ''}`}
+                  key={product.id}
+                  className={`plan-option ${selectedProductId === product.id ? 'selected' : ''}`}
                   onClick={() => setSelectedProductId(product.id)}
                 >
-                  <h4>{product.name}</h4>
-                  <p>{product.description}</p>
-                  <div className="product-price">
-                    <span>R$ {product.price.toFixed(2)}</span>
-                  </div>
+                  <div className="plan-name">Assinatura {product.name}</div>
+                  <div className="plan-description">{product.description}</div>
+                  <div className="plan-price">R$ {(product.price / 100).toFixed(2)}</div>
                 </div>
-              ))
-            )}
+              ))}
+            </div>
+          ) : (
+            <p className="loading-text">Carregando planos disponíveis...</p>
+          )}
+        </div>
+
+        <h4>Método de Pagamento</h4>
+        <div className="payment-methods">
+          <div className="payment-method-option selected">
+            PIX
           </div>
         </div>
-        
-        <div className="form-section">
-          <h3>Método de Pagamento</h3>
-          <div className="payment-methods">
-            {paymentMethods.map(method => (
-              <div
-                key={method.id}
-                className={`payment-method-card ${formData.paymentMethod === method.id ? 'selected' : ''}`}
-                onClick={() => setFormData(prev => ({ ...prev, paymentMethod: method.id }))}
-              >
-                {method.name}
-              </div>
-            ))}
+
+        <div className="payment-info-box">
+          <p>Após preencher seus dados, você receberá um QR Code para pagamento via PIX.</p>
+          <p>O pagamento será processado instantaneamente após a confirmação.</p>
+        </div>
+
+        {error && (
+          <div className="form-error">
+            <AlertIcon /> {error}
           </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="billing-form">
+          <h4>Dados para Faturamento</h4>
           
-          <div className="payment-method-info">
-            {formData.paymentMethod === 'PIX' && (
-              <div className="pix-info">
-                <p>Após preencher seus dados, você receberá um QR Code para pagamento via PIX.</p>
-                <p>O pagamento será processado instantaneamente após a confirmação.</p>
-              </div>
-            )}
-            
-            {formData.paymentMethod === 'CREDIT_CARD' && (
-              <div className="credit-card-info">
-                <p>Você será redirecionado para uma página segura para inserir os dados do seu cartão.</p>
-                <p>Aceitamos as principais bandeiras: Visa, Mastercard, American Express, Elo.</p>
-              </div>
-            )}
-            
-            {formData.paymentMethod === 'BOLETO' && (
-              <div className="boleto-info">
-                <p>O boleto será gerado após o preenchimento dos seus dados.</p>
-                <p>O prazo para compensação é de até 3 dias úteis após o pagamento.</p>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        <div className="form-section">
-          <h3>Dados para Faturamento</h3>
-          <div className="form-group">
-            <label htmlFor="taxId">CPF/CNPJ*</label>
-            <input
-              type="text"
-              id="taxId"
-              name="taxId"
-              value={formData.taxId}
-              onChange={handleChange}
-              required
-              placeholder="000.000.000-00"
-              maxLength={18}
-            />
-          </div>
+          {isLoadingUserData && (
+            <div className="loading-indicator">
+              <p>Carregando seus dados salvos...</p>
+            </div>
+          )}
           
-          <div className="form-group">
-            <label htmlFor="cellphone">Celular*</label>
-            <input
-              type="text"
-              id="cellphone"
-              name="cellphone"
-              value={formData.cellphone}
-              onChange={handleChange}
-              required
-              placeholder="(00) 00000-0000"
-              maxLength={15}
-            />
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="taxId">CPF/CNPJ*</label>
+              <input
+                type="text"
+                id="taxId"
+                name="taxId"
+                value={formData.taxId}
+                onChange={handleChange}
+                placeholder="000.000.000-00"
+                className="form-control"
+                required
+              />
+            </div>
+            
+            <div className="form-group">
+              <label htmlFor="cellphone">Celular*</label>
+              <input
+                type="text"
+                id="cellphone"
+                name="cellphone"
+                value={formData.cellphone}
+                onChange={handleChange}
+                placeholder="(00) 00000-0000"
+                className="form-control"
+                required
+              />
+            </div>
           </div>
-        </div>
-        
-        <div className="form-section">
-          <h3>Endereço (obrigatório)</h3>
-          <div className="form-group">
-            <label htmlFor="address">Rua*</label>
-            <input
-              type="text"
-              id="address"
-              name="address"
-              value={formData.address}
-              onChange={handleChange}
-              required
-              placeholder="Nome da rua"
-            />
+
+          <h4>Endereço (obrigatório)</h4>
+          
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="address">Rua*</label>
+              <input
+                type="text"
+                id="address"
+                name="address"
+                value={formData.address}
+                onChange={handleChange}
+                placeholder="Nome da rua"
+                className="form-control"
+                required
+              />
+            </div>
           </div>
           
           <div className="form-row">
@@ -388,8 +588,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
                 name="addressNumber"
                 value={formData.addressNumber}
                 onChange={handleChange}
-                required
                 placeholder="Número"
+                className="form-control"
+                required
               />
             </div>
             
@@ -402,21 +603,25 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
                 value={formData.complement}
                 onChange={handleChange}
                 placeholder="Apto, Bloco, etc."
+                className="form-control"
               />
             </div>
           </div>
           
-          <div className="form-group">
-            <label htmlFor="neighborhood">Bairro*</label>
-            <input
-              type="text"
-              id="neighborhood"
-              name="neighborhood"
-              value={formData.neighborhood}
-              onChange={handleChange}
-              required
-              placeholder="Bairro"
-            />
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="neighborhood">Bairro*</label>
+              <input
+                type="text"
+                id="neighborhood"
+                name="neighborhood"
+                value={formData.neighborhood}
+                onChange={handleChange}
+                placeholder="Bairro"
+                className="form-control"
+                required
+              />
+            </div>
           </div>
           
           <div className="form-row">
@@ -428,8 +633,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
                 name="city"
                 value={formData.city}
                 onChange={handleChange}
-                required
                 placeholder="Cidade"
+                className="form-control"
+                required
               />
             </div>
             
@@ -441,12 +647,14 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
                 name="state"
                 value={formData.state}
                 onChange={handleChange}
-                required
                 placeholder="UF"
-                maxLength={2}
+                className="form-control"
+                required
               />
             </div>
-            
+          </div>
+          
+          <div className="form-row">
             <div className="form-group">
               <label htmlFor="postalCode">CEP*</label>
               <input
@@ -455,37 +663,36 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess }) => {
                 name="postalCode"
                 value={formData.postalCode}
                 onChange={handleChange}
-                required
                 placeholder="00000-000"
-                maxLength={9}
+                className="form-control"
+                required
               />
             </div>
           </div>
-        </div>
-        
-        <div className="payment-note">
-          <p>Ao clicar em "Finalizar Pagamento", você será redirecionado para a plataforma segura do AbacatePay para completar o pagamento de acordo com o método escolhido.</p>
-        </div>
-        
-        <div className="form-buttons">
-          <button
-            type="submit"
-            className="payment-button"
-            disabled={isLoading || !selectedProductId}
-          >
-            {isLoading ? 'Processando...' : 'Finalizar Pagamento'}
-          </button>
-          
-          <button
-            type="button"
-            className="cancel-button"
-            onClick={onClose}
-            disabled={isLoading}
-          >
-            Voltar
-          </button>
-        </div>
-      </form>
+
+          <div className="checkout-disclaimer">
+            <p>Ao clicar em "Finalizar Pagamento", você será redirecionado para a plataforma segura do AbacatePay para completar o pagamento de acordo com o método escolhido.</p>
+          </div>
+
+          <div className="form-actions">
+            <button 
+              type="submit" 
+              className="btn btn-primary"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Processando...' : 'Finalizar Pagamento'}
+            </button>
+            <button 
+              type="button" 
+              className="btn btn-outline"
+              onClick={onClose}
+              disabled={isLoading}
+            >
+              Voltar
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

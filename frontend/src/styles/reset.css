@@ -1,0 +1,110 @@
+/* 
+  Reset CSS - Prompt Evaluator
+  Este arquivo normaliza os estilos entre diferentes navegadores
+*/
+
+html, body, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+b, u, i, center,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td,
+article, aside, canvas, details, embed, 
+figure, figcaption, footer, header, hgroup, 
+menu, nav, output, ruby, section, summary,
+time, mark, audio, video {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 100%;
+  font: inherit;
+  vertical-align: baseline;
+}
+
+/* Configurações de exibição HTML5 para navegadores antigos */
+article, aside, details, figcaption, figure, 
+footer, header, hgroup, menu, nav, section {
+  display: block;
+}
+
+/* Comportamento de linha natural */
+body {
+  line-height: 1;
+}
+
+/* Remover estilos de listas */
+ol, ul {
+  list-style: none;
+}
+
+/* Remover aspas de citações */
+blockquote, q {
+  quotes: none;
+}
+
+blockquote:before, blockquote:after,
+q:before, q:after {
+  content: '';
+  content: none;
+}
+
+/* Garantir bordas consistentes em tabelas */
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+/* Remover resíduos de links em dispositivos iOS */
+a {
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Ajustar box model */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Esconder conteúdo de leitores de tela visualmente sem remover do fluxo do documento */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Melhorar a renderização de texto */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Evitar ajuste de texto em dispositivos móveis ao girar */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Melhorar a acessibilidade de foco */
+:focus {
+  outline: 3px solid rgba(59, 130, 246, 0.5);
+  outline-offset: 2px;
+}
+
+/* Permitir que usuários que preferem navegação por teclado vejam o foco */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.5);
+  outline-offset: 2px;
+} 

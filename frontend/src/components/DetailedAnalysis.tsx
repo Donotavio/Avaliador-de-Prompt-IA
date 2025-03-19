@@ -1,112 +1,53 @@
 import React from 'react';
-import './DetailedAnalysis.css';
 
 // Função para limpar o texto da análise detalhada
 const cleanAnalysisText = (text: string): string => {
   if (!text) return '';
-  
-  // Remove números sozinhos no início da linha
-  let cleanedText = text.replace(/^\s*\d+\s*$/m, '').trim();
-  
-  // Remove scores de avaliação (como "EFICÁCIA: 8")
-  cleanedText = cleanedText.replace(/\b(CLAREZA|CONTEXTO|EFICÁCIA):\s*\d+(\s*\/\s*\d+)?\s*/gi, '').trim();
-  
-  return cleanedText;
-};
-
-const formatText = (text: string): JSX.Element => {
-  // Limpa o texto antes de formatá-lo
-  const cleanedText = cleanAnalysisText(text);
-  
-  if (!cleanedText) return <p>Informação não disponível</p>;
-  
-  // Converter links para elementos clicáveis
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const textWithLinks = cleanedText.split(urlRegex).map((part, i) => {
-    return part.match(urlRegex) ? (
-      <a key={i} href={part} target="_blank" rel="noopener noreferrer">
-        {part}
-      </a>
-    ) : (
-      part
-    );
-  });
-
-  // Quebrar parágrafos
-  const withParagraphs = textWithLinks.map((part) => {
-    if (typeof part === 'string') {
-      return part.split('\n\n').map((paragraph, idx) => (
-        <p key={idx}>{paragraph.split('\n').map((line, i) => (
-          <React.Fragment key={i}>
-            {line}
-            {i < paragraph.split('\n').length - 1 && <br />}
-          </React.Fragment>
-        ))}</p>
-      ));
-    }
-    return part;
-  });
-
-  return <>{withParagraphs}</>;
+  // Remove marcações de markdown simples que podem vir na resposta
+  return text
+    .replace(/^\s*[-*]\s+/gm, '') // Remove bullet points no início das linhas
+    .replace(/^#+\s+/gm, '')      // Remove títulos markdown
+    .replace(/\*\*(.*?)\*\*/g, '$1') // Remove negrito
+    .replace(/\*(.*?)\*/g, '$1')  // Remove itálico
+    .trim();
 };
 
 interface DetailedAnalysisProps {
-  analysis: {
+  analysisData: {
     central_objective?: string;
     strengths_weaknesses?: string;
     context?: string;
     practical_suggestions?: string;
     ethical_practices?: string;
-  } | null;
+  };
 }
 
-const DetailedAnalysis: React.FC<DetailedAnalysisProps> = ({ analysis }) => {
-  if (!analysis) {
-    return (
-      <div className="detailed-analysis">
-        <p>Análise detalhada não disponível.</p>
-      </div>
-    );
-  }
+const DetailedAnalysis: React.FC<DetailedAnalysisProps> = ({ analysisData }) => {
+  if (!analysisData) return null;
+
+  const sections = [
+    { title: 'Objetivo Central', content: analysisData.central_objective },
+    { title: 'Pontos Fortes e Fracos', content: analysisData.strengths_weaknesses },
+    { title: 'Análise de Contexto', content: analysisData.context },
+    { title: 'Sugestões Práticas', content: analysisData.practical_suggestions },
+    { title: 'Práticas Éticas', content: analysisData.ethical_practices }
+  ];
+
+  // Filtrar apenas seções que têm conteúdo
+  const filteredSections = sections.filter(section => section.content);
+
+  if (filteredSections.length === 0) return null;
 
   return (
     <div className="detailed-analysis">
-      <h2>Análise Detalhada</h2>
+      <h3 className="detailed-title">Análise Detalhada</h3>
       
-      <div className="analysis-section">
-        <h3>Objetivo Central</h3>
-        <div className="analysis-content">
-          {formatText(analysis.central_objective || '')}
+      {filteredSections.map((section, index) => (
+        <div key={index} className="analysis-section">
+          <h4 className="section-title">{section.title}</h4>
+          <p className="section-content">{cleanAnalysisText(section.content || '')}</p>
         </div>
-      </div>
-      
-      <div className="analysis-section">
-        <h3>Pontos Fortes e Fracos</h3>
-        <div className="analysis-content">
-          {formatText(analysis.strengths_weaknesses || '')}
-        </div>
-      </div>
-      
-      <div className="analysis-section">
-        <h3>Contexto</h3>
-        <div className="analysis-content">
-          {formatText(analysis.context || '')}
-        </div>
-      </div>
-      
-      <div className="analysis-section">
-        <h3>Sugestões Práticas</h3>
-        <div className="analysis-content">
-          {formatText(analysis.practical_suggestions || '')}
-        </div>
-      </div>
-      
-      <div className="analysis-section">
-        <h3>Práticas Éticas</h3>
-        <div className="analysis-content">
-          {formatText(analysis.ethical_practices || '')}
-        </div>
-      </div>
+      ))}
     </div>
   );
 };

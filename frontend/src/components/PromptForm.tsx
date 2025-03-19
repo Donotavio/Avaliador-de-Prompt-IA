@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { logger } from '../utils/logger';
 import PremiumModal from './PremiumModal';
 import EvaluationResult from './EvaluationResult';
-import '../App.css';
-import '../styles/PromptForm.css';
+import ThinkingAnimation from './ThinkingAnimation';
 
 // Ícones SVG inline
 const SparkleIcon = () => (
@@ -37,6 +36,7 @@ const AlertIcon = () => (
 interface PromptFormProps {
   userId: string;
   isAdmin?: boolean;
+  isPremium?: boolean;
   openPremiumModal?: () => void;
 }
 
@@ -46,21 +46,31 @@ interface PromptEvaluation {
   effectiveness_score: number;
   suggestions: string[];
   optimized_prompt: string;
+  scores?: {
+    clarity?: number;
+    context?: number;
+    effectiveness?: number;
+    average?: number;
+  };
+  detailed_analysis?: {
+    central_objective?: string;
+    strengths_weaknesses?: string;
+    context?: string;
+    practical_suggestions?: string;
+    ethical_practices?: string;
+  };
 }
 
-const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, openPremiumModal }) => {
+const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, openPremiumModal }) => {
   const [prompt, setPrompt] = useState('');
   const [context, setContext] = useState('');
-  const [targetLLM, setTargetLLM] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [model, setModel] = useState<string>('');
+  const [isEvaluating, setIsEvaluating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [evaluation, setEvaluation] = useState<PromptEvaluation | null>(null);
-  const [canUsePremium, setCanUsePremium] = useState(false);
-  const [premiumMessage, setPremiumMessage] = useState('');
-  const [canUseFree, setCanUseFree] = useState(true);
-  const [freeMessage, setFreeMessage] = useState('');
+  const [result, setResult] = useState<PromptEvaluation | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [hasPremiumExpired, setHasPremiumExpired] = useState(false);
+  const [evaluationCount, setEvaluationCount] = useState<number | null>(null);
+  const [maxFreeEvaluations] = useState<number>(10);
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -85,7 +95,7 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, openPremiumMod
         });
         
         if (response.ok) {
-          const userData = await response.json();
+          await response.json();
         }
       } catch (error) {
         console.error('Erro ao verificar permissões:', error);
@@ -118,28 +128,28 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, openPremiumMod
       if (!response.ok) {
         // Se o erro for 401 ou 403, definimos valores padrão para usuários não autenticados
         if (response.status === 401 || response.status === 403) {
-          setCanUsePremium(false);
-          setHasPremiumExpired(false);
-          setPremiumMessage('Login necessário para acesso premium');
+          setEvaluationCount(null);
           return;
         }
         throw new Error('Falha ao verificar status premium');
       }
       
       const data = await response.json();
-      setCanUsePremium(data.can_use);
-      setPremiumMessage(data.message);
-      setHasPremiumExpired(data.has_expired || false);
+      setEvaluationCount(data.evaluation_count);
       
-      if (data.has_expired && data.message.includes('Limite de ativações premium atingido')) {
-        setIsModalOpen(true);
+      // Não definir mensagem de status para usuários premium
+      // Só definir erro se explicitamente não puder usar premium
+      if (data.status === false) {
+        setError(data.message);
+      } else {
+        // Limpar mensagens de erro anteriores se o status for ok
+        setError(null);
       }
     } catch (error) {
       console.error('Erro ao verificar status premium:', error);
       // Por padrão, define que não pode usar premium
-      setCanUsePremium(false);
-      setHasPremiumExpired(false);
-      setPremiumMessage('Não foi possível verificar o status premium');
+      setEvaluationCount(null);
+      setError('Não foi possível verificar o status premium');
     }
   };
 
@@ -157,25 +167,30 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, openPremiumMod
       if (!response.ok) {
         // Se o erro for 401 ou 403, definimos valores padrão para usuários não autenticados
         if (response.status === 401 || response.status === 403) {
-          setCanUseFree(true);
-          setFreeMessage('Primeira avaliação gratuita');
+          setEvaluationCount(maxFreeEvaluations);
           return;
         }
         throw new Error('Falha ao verificar status gratuito');
       }
       
       const data = await response.json();
-      setCanUseFree(data.can_use_free);
-      setFreeMessage(data.message);
+      setEvaluationCount(data.evaluation_count);
+      
+      // Só definir erro se o status for falso (não pode usar)
+      if (data.status === false) {
+        setError(data.message);
+      } else {
+        // Limpar mensagens de erro anteriores se o status for ok
+        setError(null);
+      }
     } catch (error) {
       console.error('Erro ao verificar status gratuito:', error);
       // Em caso de erro, definimos valores padrão permissivos
-      setCanUseFree(true);
-      setFreeMessage('Primeira avaliação gratuita');
+      setEvaluationCount(maxFreeEvaluations);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     
     if (prompt.trim().length < 10) {
@@ -183,27 +198,39 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, openPremiumMod
       return;
     }
 
-    if (!targetLLM) {
+    if (!model) {
       showMessage('Por favor, selecione o modelo LLM', 'error');
       return;
     }
 
-    setIsLoading(true);
+    setIsEvaluating(true);
     setError(null);
-    setEvaluation(null);
+    setResult(null);
 
     try {
+      // Use 'anon' como ID para usuários não logados
+      const actualUserId = userId || 'anon';
+      
+      // Verificar se há token de autenticação
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Adicionar token de autenticação se disponível
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await fetch('/evaluate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           content: prompt,
           context: context || undefined,
-          plan_type: canUsePremium ? "premium" : "free",
-          user_id: userId,
-          target_llm: targetLLM,
+          plan_type: isPremium ? "premium" : "free",  // Use plano premium se usuário tiver acesso
+          user_id: actualUserId,
+          target_llm: model,
         }),
       });
 
@@ -221,7 +248,26 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, openPremiumMod
       if (data && data.evaluation) {
         console.log('Scores recebidos:', data.evaluation.clarity_score, data.evaluation.context_score, data.evaluation.effectiveness_score);
         console.log('Análise detalhada recebida:', data.evaluation.detailed_analysis);
-        setEvaluation(data.evaluation);
+
+        // Se a análise detalhada for uma string, tentamos convertê-la para objeto
+        if (typeof data.evaluation.detailed_analysis === 'string') {
+          try {
+            data.evaluation.detailed_analysis = JSON.parse(data.evaluation.detailed_analysis);
+          } catch (e) {
+            console.error('Erro ao parsear detailed_analysis:', e);
+            // Se falhar, criamos um objeto com a string na propriedade central_objective
+            data.evaluation.detailed_analysis = {
+              central_objective: data.evaluation.detailed_analysis
+            };
+          }
+        }
+        
+        setResult(data.evaluation);
+        
+        // Atualizar o contador de avaliações após avaliação bem-sucedida
+        if (!isPremium) {
+          await checkFreeStatus();
+        }
       } else {
         throw new Error('Estrutura de resposta inválida');
       }
@@ -229,11 +275,13 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, openPremiumMod
       console.error('Erro:', error);
       showMessage(error instanceof Error ? error.message : 'Erro ao avaliar o prompt', 'error');
     } finally {
-      setIsLoading(false);
+      setIsEvaluating(false);
     }
   };
 
-  const resetUsage = async () => {
+  const handleReset = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    
     try {
       const response = await fetch(`/reset/${userId}`, {
         method: 'POST',
@@ -252,26 +300,44 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, openPremiumMod
     }
   };
 
-  return (
-    <>
-      <div className="form-section">
-        <div className="form-section-header">
-          <div className={`status-badge ${canUsePremium ? 'premium' : 'free'}`}>
-            {canUsePremium ? 'Premium' : 'Gratuito'}
-          </div>
-          <p className="status-message">
-            {canUsePremium ? premiumMessage : canUseFree ? freeMessage : 'Limite de uso gratuito atingido'}
-          </p>
-        </div>
+  // Função para abrir o modal premium
+  const handleOpenPremiumModal = () => {
+    setIsModalOpen(true);
+  };
 
-        {error && (
-          <div className="error-message error">
-            <AlertIcon />
-            {error}
+  return (
+    <div className="prompt-form-container">
+      <div className="prompt-form">
+        <h2>Avalie seu prompt</h2>
+        
+        {evaluationCount !== null && !isPremium && (
+          <div className="evaluation-count">
+            <span>{maxFreeEvaluations - (evaluationCount || 0)}/{maxFreeEvaluations} avaliações restantes</span>
+            {evaluationCount >= maxFreeEvaluations / 2 && (
+              <button 
+                className="btn btn-secondary" 
+                onClick={openPremiumModal || handleOpenPremiumModal}
+              >
+                <SparkleIcon /> Comprar Premium
+              </button>
+            )}
           </div>
         )}
-
-        <form className="prompt-form" onSubmit={handleSubmit}>
+        
+        {isPremium && (
+          <div className="evaluation-count premium-count">
+            <span>Uso ilimitado (Plano Premium)</span>
+          </div>
+        )}
+        
+        {evaluationCount !== null && evaluationCount >= maxFreeEvaluations && !isPremium && (
+          <p className="prompt-status error">
+            <AlertIcon />
+            Limite diário de {maxFreeEvaluations} avaliações gratuitas atingido
+          </p>
+        )}
+        
+        <form onSubmit={(e) => e.preventDefault()}>
           <div className="form-group">
             <label htmlFor="prompt">Prompt*</label>
             <textarea
@@ -279,35 +345,31 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, openPremiumMod
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Digite seu prompt aqui..."
-              required
-              disabled={!canUsePremium && !canUseFree}
+              className="form-control"
             />
           </div>
-
+          
           <div className="form-group">
-            <label htmlFor="targetLLM">Modelo LLM*</label>
+            <label htmlFor="model">Modelo LLM*</label>
             <select
-              id="targetLLM"
-              value={targetLLM}
-              onChange={(e) => setTargetLLM(e.target.value)}
-              required
-              disabled={!canUsePremium && !canUseFree}
+              id="model"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              className="form-control"
             >
               <option value="">Selecione o modelo LLM</option>
-              <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+              <option value="gpt-3.5-turbo">GPT-3.5</option>
+              <option value="gpt-4">GPT-4</option>
               <option value="gpt-4-turbo">GPT-4 Turbo</option>
-              <option value="gpt-4o">GPT-4o</option>
               <option value="claude-3-opus">Claude 3 Opus</option>
               <option value="claude-3-sonnet">Claude 3 Sonnet</option>
               <option value="claude-3-haiku">Claude 3 Haiku</option>
               <option value="gemini-pro">Gemini Pro</option>
               <option value="gemini-ultra">Gemini Ultra</option>
-              <option value="llama3">Llama 3</option>
-              <option value="mistral-large">Mistral Large</option>
-              <option value="outro">Outro</option>
+              <option value="llama-3-70b">Llama 3 70B</option>
             </select>
           </div>
-
+          
           <div className="form-group">
             <label htmlFor="context">Contexto (opcional)</label>
             <textarea
@@ -315,59 +377,57 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, openPremiumMod
               value={context}
               onChange={(e) => setContext(e.target.value)}
               placeholder="Adicione contexto adicional para melhor avaliação..."
-              disabled={!canUsePremium && !canUseFree}
+              className="form-control"
             />
           </div>
-
-          <div className="button-group">
-            <button
-              type="submit"
-              className="submit-button"
-              disabled={isLoading || (!canUsePremium && !canUseFree)}
+          
+          {error && error.trim() !== "" && (
+            <div className="message error">
+              <AlertIcon /> {error}
+            </div>
+          )}
+          
+          <div className="form-actions">
+            <button 
+              type="button"
+              onClick={handleSubmit} 
+              disabled={isEvaluating || !prompt.trim() || !model} 
+              className="btn btn-primary"
             >
-              {isLoading ? <><div className="spinner"></div>Avaliando...</> : <><SendIcon />Avaliar Prompt</>}
+              {isEvaluating ? 'Avaliando...' : 'Avaliar Prompt'}
+              {!isEvaluating && <SendIcon />}
             </button>
             
-            {(!canUsePremium || hasPremiumExpired) && (
-              <button
-                type="button"
-                className="premium-button"
-                onClick={openPremiumModal || (() => setIsModalOpen(true))}
-                disabled={isLoading}
-              >
-                <SparkleIcon />
-                {hasPremiumExpired ? 'Renovar Premium' : 'Comprar Premium'}
-              </button>
-            )}
+            <button 
+              type="button"
+              onClick={handleReset} 
+              disabled={isEvaluating || (!prompt.trim() && !context.trim())} 
+              className="btn btn-secondary"
+            >
+              <ResetIcon /> Limpar
+            </button>
             
-            {isAdmin && (
+            {!isPremium && (
               <button
                 type="button"
-                className="reset-button"
-                onClick={resetUsage}
-                disabled={isLoading}
+                onClick={openPremiumModal || handleOpenPremiumModal}
+                className="btn premium-button"
               >
-                <ResetIcon />
-                Resetar Uso (Admin)
+                <SparkleIcon /> Premium
               </button>
             )}
           </div>
         </form>
       </div>
-
-      {evaluation && (
-        <div className="feedback-section">
-          <EvaluationResult result={evaluation} />
-        </div>
+      
+      {isModalOpen && <PremiumModal onClose={() => setIsModalOpen(false)} refreshPage={true} />}
+      
+      {isEvaluating && (
+        <ThinkingAnimation message="Analisando seu prompt com inteligência artificial..." />
       )}
-
-      {isModalOpen && (
-        <PremiumModal 
-          onClose={() => setIsModalOpen(false)} 
-          refreshPage={true}
-        />
-      )}
-    </>
+      
+      {result && <EvaluationResult result={result} />}
+    </div>
   );
 };
 

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import './PaymentResult.css';
 
 interface PaymentResultProps {
   checkoutUrl: string;

@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef } from 'react';
-import '../styles/EvaluationResult.css';
 import DetailedAnalysis from './DetailedAnalysis';
 
 interface EvaluationResultProps {
@@ -30,188 +29,192 @@ interface EvaluationResultProps {
 }
 
 const EvaluationResult: React.FC<EvaluationResultProps> = ({ result }) => {
-  const [copySuccess, setCopySuccess] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [fadeIn, setFadeIn] = useState(false);
   const resultRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (result) {
-      console.log('Dados recebidos pelo EvaluationResult:', result);
-    }
-  }, [result]);
 
   // Scroll para o resultado quando ele for exibido
   useEffect(() => {
-    if (result && resultRef.current) {
+    if (resultRef.current) {
       resultRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [result]);
+    // Adicionar efeito de fade-in
+    setTimeout(() => setFadeIn(true), 100);
+  }, []);
 
-  // Reseta a mensagem de cópia após 2 segundos
-  useEffect(() => {
-    if (copySuccess) {
-      const timer = setTimeout(() => {
-        setCopySuccess(false);
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [copySuccess]);
-
-  if (!result) {
-    return null;
-  }
-
-  // Extrair valores diretos se estiverem no nível raiz do objeto (compatibilidade com backend)
-  const directClarity = typeof result.clarity_score === 'number' ? result.clarity_score : undefined;
-  const directContext = typeof result.context_score === 'number' ? result.context_score : undefined;
-  const directEffectiveness = typeof result.effectiveness_score === 'number' ? result.effectiveness_score : undefined;
-
-  // Extrair de scores (compatibilidade com estrutura anterior)
-  const { scores = {}, suggestions = [], optimized_prompt = '', improved_versions = [], premium_status, detailed_analysis = {} } = result;
-  
-  // Usar valores diretos se disponíveis, caso contrário usar os de scores
-  const clarity = directClarity !== undefined ? directClarity : scores.clarity ?? 0;
-  const context = directContext !== undefined ? directContext : scores.context ?? 0;
-  const effectiveness = directEffectiveness !== undefined ? directEffectiveness : scores.effectiveness ?? 0;
-  const average = scores.average ?? ((clarity + context + effectiveness) / 3);
-
-  // Funções de formatação
-  const getColorForScore = (score: number): string => {
-    if (score === 0) return '#dc3545'; // Vermelho para zero
-    if (score < 4) return '#dc3545';   // Vermelho para baixo
-    if (score < 7) return '#ffc107';   // Amarelo para médio
-    return '#28a745';                  // Verde para alto
+  const handleCopy = (text: string, index: number) => {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        setCopiedIndex(index);
+        setTimeout(() => setCopiedIndex(null), 2000);
+      })
+      .catch(err => {
+        console.error('Erro ao copiar: ', err);
+      });
   };
+
+  // Extraindo os scores
+  const clarityScore = result.clarity_score ?? result.scores?.clarity ?? 0;
+  const contextScore = result.context_score ?? result.scores?.context ?? 0;
+  const effectivenessScore = result.effectiveness_score ?? result.scores?.effectiveness ?? 0;
+  
+  // Calculando média se não estiver disponível
+  const averageScore = result.scores?.average ?? 
+    ((clarityScore + contextScore + effectivenessScore) / 3);
 
   const formatScore = (score: number): string => {
-    // Garantir que o score seja um número
-    if (isNaN(score) || score === null || score === undefined) return '0/10';
-    return `${score}/10`;
+    return score.toFixed(1);
   };
 
-  // Filtrar sugestões vazias e remover duplicatas
-  const filteredSuggestions = suggestions
-    .filter(suggestion => suggestion && suggestion.trim() !== '' && suggestion !== 'Nenhuma sugestão disponível')
-    .filter((suggestion, index, self) => self.indexOf(suggestion) === index);
-
-  // Função para copiar o prompt otimizado
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(optimized_prompt);
-      setCopySuccess(true);
-    } catch (err) {
-      console.error('Erro ao copiar o texto: ', err);
-    }
+  // Função para determinar cor com base na pontuação
+  const getScoreColor = (score: number): string => {
+    if (score >= 8) return 'var(--success)';
+    if (score >= 6) return 'var(--warning)';
+    return 'var(--error)';
   };
-
-  // Ícone de cópia
-  const CopyIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-    </svg>
-  );
-
-  // Ícone de verificação
-  const CheckIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12"></polyline>
-    </svg>
-  );
-
-  // Verifica se há análise detalhada
-  const hasDetailedAnalysis = detailed_analysis && (
-    detailed_analysis.central_objective || 
-    detailed_analysis.strengths_weaknesses || 
-    detailed_analysis.context || 
-    detailed_analysis.practical_suggestions || 
-    detailed_analysis.ethical_practices
-  );
 
   return (
-    <div className="evaluation-result" ref={resultRef}>
-      <h2>Resultado da Avaliação</h2>
-      
-      <div className="scores-section">
-        <h3>Pontuações</h3>
-        <div className="scores-grid">
-          <div className="score-item">
-            <label>CLAREZA:</label>
-            <div className="score-value" style={{ color: getColorForScore(clarity) }}>
-              {formatScore(clarity)}
-            </div>
-          </div>
-          <div className="score-item">
-            <label>CONTEXTO:</label>
-            <div className="score-value" style={{ color: getColorForScore(context) }}>
-              {formatScore(context)}
-            </div>
-          </div>
-          <div className="score-item">
-            <label>EFICÁCIA:</label>
-            <div className="score-value" style={{ color: getColorForScore(effectiveness) }}>
-              {formatScore(effectiveness)}
-            </div>
-          </div>
-          <div className="score-item">
-            <label>MÉDIA:</label>
-            <div className="score-value" style={{ color: getColorForScore(average) }}>
-              {formatScore(typeof average === 'number' ? parseFloat(average.toFixed(1)) : 0)}
-            </div>
-          </div>
-        </div>
+    <div 
+      ref={resultRef} 
+      className={`prompt-evaluation ${fadeIn ? 'fade-in' : ''}`}
+    >
+      <div className="evaluation-header">
+        <h2 className="evaluation-title">Resultado da Avaliação</h2>
+        <p className="evaluation-desc">Análise detalhada do seu prompt e sugestões de melhoria</p>
       </div>
 
-      <div className="suggestions-section">
-        <h3>Sugestões de Melhoria</h3>
-        {filteredSuggestions.length > 0 ? (
-          <ul>
-            {filteredSuggestions.map((suggestion, index) => (
-              <li key={index}>{suggestion}</li>
-            ))}
-          </ul>
-        ) : (
-          <p className="no-data-message">Nenhuma sugestão disponível</p>
-        )}
-      </div>
-
-      {optimized_prompt && optimized_prompt !== 'Não foi possível gerar um prompt otimizado' && (
-        <div className="optimized-prompt-section">
-          <div className="section-header">
-            <h3>Prompt Otimizado</h3>
-            <button 
-              className={`copy-button ${copySuccess ? 'copied' : ''}`}
-              onClick={copyToClipboard} 
-              title="Copiar para área de transferência"
-            >
-              {copySuccess ? <><CheckIcon /> Copiado!</> : <><CopyIcon /> Copiar</>}
-            </button>
-          </div>
-          <div className="prompt-box">
-            {optimized_prompt}
-          </div>
-        </div>
-      )}
-
-      {hasDetailedAnalysis && <DetailedAnalysis analysis={detailed_analysis} />}
-
-      {improved_versions && improved_versions.length > 0 && (
-        <div className="improved-versions-section">
-          <h3>Versões Melhoradas do Prompt</h3>
-          {improved_versions.map((version, index) => (
-            <div key={index} className="improved-version">
-              <h4>Versão {index + 1}</h4>
-              <div className="prompt-box">
-                {version}
+      <div className="evaluation-criteria">
+        <div className="criterion">
+          <div className="criterion-header">
+            <span className="criterion-label">Clareza</span>
+            <div className="criterion-rating">
+              <div 
+                className="rating-value" 
+                style={{ color: getScoreColor(clarityScore) }}
+              >
+                {formatScore(clarityScore)}
+              </div>
+              <div className="rating-stars">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <span 
+                    key={i} 
+                    style={{ 
+                      opacity: (clarityScore / 10) * 5 > i ? 1 : 0.3 
+                    }}
+                  >★</span>
+                ))}
               </div>
             </div>
-          ))}
+          </div>
+          <p className="criterion-desc">Quão claro e explícito é o prompt</p>
+        </div>
+
+        <div className="criterion">
+          <div className="criterion-header">
+            <span className="criterion-label">Contexto</span>
+            <div className="criterion-rating">
+              <div 
+                className="rating-value" 
+                style={{ color: getScoreColor(contextScore) }}
+              >
+                {formatScore(contextScore)}
+              </div>
+              <div className="rating-stars">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <span 
+                    key={i} 
+                    style={{ 
+                      opacity: (contextScore / 10) * 5 > i ? 1 : 0.3 
+                    }}
+                  >★</span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <p className="criterion-desc">Grau de contexto e informações de suporte</p>
+        </div>
+
+        <div className="criterion">
+          <div className="criterion-header">
+            <span className="criterion-label">Eficácia</span>
+            <div className="criterion-rating">
+              <div 
+                className="rating-value" 
+                style={{ color: getScoreColor(effectivenessScore) }}
+              >
+                {formatScore(effectivenessScore)}
+              </div>
+              <div className="rating-stars">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <span 
+                    key={i} 
+                    style={{ 
+                      opacity: (effectivenessScore / 10) * 5 > i ? 1 : 0.3 
+                    }}
+                  >★</span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <p className="criterion-desc">Capacidade de produzir resultados desejados</p>
+        </div>
+
+        <div className="criterion">
+          <div className="criterion-header">
+            <span className="criterion-label">Pontuação Média</span>
+            <div className="criterion-rating">
+              <div 
+                className="rating-value" 
+                style={{ color: getScoreColor(averageScore) }}
+              >
+                {formatScore(averageScore)}
+              </div>
+              <div className="rating-stars">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <span 
+                    key={i} 
+                    style={{ 
+                      opacity: (averageScore / 10) * 5 > i ? 1 : 0.3 
+                    }}
+                  >★</span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <p className="criterion-desc">Qualidade geral do prompt</p>
+        </div>
+      </div>
+
+      {result.optimized_prompt && (
+        <div className="optimized-prompt">
+          <h3>Versão Otimizada do Prompt</h3>
+          <div className="prompt-text-container">
+            <div className="prompt-text">
+              {result.optimized_prompt}
+            </div>
+            <button 
+              className="copy-button"
+              onClick={() => handleCopy(result.optimized_prompt || '', 0)}
+            >
+              {copiedIndex === 0 ? 'Copiado!' : 'Copiar'}
+            </button>
+          </div>
         </div>
       )}
 
-      {premium_status && (
-        <div className="premium-status-section">
-          <p>{premium_status}</p>
+      {result.suggestions && result.suggestions.length > 0 && (
+        <div className="suggestions">
+          <h3>Sugestões de Melhoria</h3>
+          <ul className="suggestions-list">
+            {result.suggestions.map((suggestion, index) => (
+              <li key={index} className="suggestion-item">{suggestion}</li>
+            ))}
+          </ul>
         </div>
+      )}
+
+      {result.detailed_analysis && (
+        <DetailedAnalysis analysisData={result.detailed_analysis} />
       )}
     </div>
   );

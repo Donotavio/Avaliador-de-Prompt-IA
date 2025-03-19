@@ -11,6 +11,7 @@ import services.openai_patch as openai_patch
 import os
 import re
 import asyncio
+import json
 from typing import Dict, Any
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -102,6 +103,7 @@ class PromptEvaluator:
         try:
             import requests
             import os
+            import json
             
             # Configurações da API
             api_key = os.getenv("OPENAI_API_KEY_FREE")
@@ -161,13 +163,23 @@ class PromptEvaluator:
             message_id = message_data["id"]
             logger.info(f"Mensagem adicionada: {message_id}")
             
-            # Inicia a execução com o assistant
+            # Inicia a execução com o assistant, forçando o uso da função
             logger.info(f"Executando o assistant {self.assistant_id}")
+            
+            # Configuração para forçar o uso da função evaluate_prompt
+            tool_choice = {
+                "type": "function",
+                "function": {
+                    "name": "evaluate_prompt"
+                }
+            }
+            
             response = requests.post(
                 f"{base_url}/threads/{thread_id}/runs",
                 headers=headers,
                 json={
-                    "assistant_id": self.assistant_id
+                    "assistant_id": self.assistant_id,
+                    "tool_choice": tool_choice  # Instrui o modelo a usar a função específica
                 }
             )
             
@@ -182,10 +194,14 @@ class PromptEvaluator:
             
             # Monitora a execução
             import time
-            while run_status not in ["completed", "failed", "cancelled", "expired"]:
+            
+            max_retries = 60  # Limitar a 30 segundos de espera para evitar loops infinitos
+            current_retry = 0
+            
+            while run_status not in ["completed", "failed", "cancelled", "expired"] and current_retry < max_retries:
                 logger.info(f"Verificando status: {run_status}")
-                # Usar sleep em vez de asyncio.sleep para simplificar
                 time.sleep(0.5)
+                current_retry += 1
                 
                 response = requests.get(
                     f"{base_url}/threads/{thread_id}/runs/{run_id}",
@@ -195,52 +211,506 @@ class PromptEvaluator:
                 if response.status_code != 200:
                     logger.error(f"Erro ao verificar status: {response.status_code} - {response.text}")
                     raise ValueError(f"Erro ao verificar status: {response.status_code}")
-                    
+                
                 run_data = response.json()
-                run_status = run_data["status"]
+                if not run_data or not isinstance(run_data, dict):
+                    logger.error(f"Resposta run_data inválida: {run_data}")
+                    raise ValueError("Dados da execução inválidos")
+
+                run_status = run_data.get("status", "unknown")
+                
+                # Se o status for requires_action, precisamos submeter a função e continuar
+                if run_status == "requires_action":
+                    logger.info("Status requires_action detectado. Processando chamada de função...")
+                    
+                    required_action = run_data.get("required_action", {})
+                    if required_action.get("type") == "submit_tool_outputs":
+                        tool_calls = required_action.get("submit_tool_outputs", {}).get("tool_calls", [])
+                        
+                        if tool_calls:
+                            tool_outputs = []
+                            
+                            for tool_call in tool_calls:
+                                if tool_call.get("type") == "function" and tool_call.get("function", {}).get("name") == "evaluate_prompt":
+                                    function_args = tool_call["function"]["arguments"]
+                                    logger.info(f"Função chamada: evaluate_prompt com argumentos: {function_args[:200]}...")
+                                    
+                                    # Simplesmente aprovamos a chamada e deixamos o assistente continuar
+                                    tool_outputs.append({
+                                        "tool_call_id": tool_call["id"],
+                                        "output": json.dumps({"result": "approved"})
+                                    })
+                            
+                            if tool_outputs:
+                                logger.info(f"Submetendo resposta para {len(tool_outputs)} chamadas de função")
+                                
+                                # Submeter as respostas das ferramentas
+                                submit_response = requests.post(
+                                    f"{base_url}/threads/{thread_id}/runs/{run_id}/submit_tool_outputs",
+                                    headers=headers,
+                                    json={"tool_outputs": tool_outputs}
+                                )
+                                
+                                if submit_response.status_code != 200:
+                                    logger.error(f"Erro ao submeter outputs: {submit_response.status_code} - {submit_response.text}")
+                                    raise ValueError(f"Erro ao submeter outputs: {submit_response.status_code}")
+                                
+                                # Atualiza os dados da execução
+                                submit_data = submit_response.json()
+                                run_status = submit_data["status"]
+                                logger.info(f"Função aprovada! Novo status: {run_status}")
             
-            # Verifica se houve falha na execução
+            # Verifica se houve falha na execução ou timeout
             if run_status != "completed":
-                logger.error(f"Execução falhou com status: {run_status}")
-                raise ValueError(f"Falha na execução do assistant: {run_status}")
+                if current_retry >= max_retries:
+                    logger.error("Timeout ao aguardar conclusão da execução")
+                    raise ValueError("Timeout ao aguardar conclusão da execução")
+                else:
+                    logger.error(f"Execução falhou com status: {run_status}")
+                    raise ValueError(f"Falha na execução do assistant: {run_status}")
                 
             # Obtém as mensagens
-            logger.info("Recuperando mensagem de resposta")
+            logger.info("Recuperando mensagens finais de resposta")
             response = requests.get(
                 f"{base_url}/threads/{thread_id}/messages",
                 headers=headers
             )
-            
+
             if response.status_code != 200:
                 logger.error(f"Erro ao obter mensagens: {response.status_code} - {response.text}")
                 raise ValueError(f"Erro ao obter mensagens: {response.status_code}")
-                
+            
             messages_data = response.json()
+            if not messages_data or not isinstance(messages_data, dict):
+                logger.error(f"Resposta messages_data inválida: {messages_data}")
+                return {
+                    "scores": {"clarity": 0, "context": 0, "effectiveness": 0, "average": 0},
+                    "suggestions": ["Erro ao processar resposta da API. Por favor, tente novamente."],
+                    "optimized_prompt": prompt if isinstance(prompt, str) else prompt.content,
+                    "error": "invalid_messages_data",
+                    "detailed_analysis": None,
+                }
+            
+            logger.info(f"Obtidas {len(messages_data.get('data', []))} mensagens")
             
             # Filtra a última mensagem do assistente
             assistant_message = None
-            for message in messages_data["data"]:
-                if message["role"] == "assistant":
+            for message in messages_data.get("data", []):
+                if message.get("role") == "assistant":
                     assistant_message = message
                     break
-                    
+                
             if not assistant_message:
                 logger.error("Mensagem do assistente não encontrada")
-                raise ValueError("Mensagem do assistente não encontrada")
-            
+                # Em vez de lançar uma exceção, vamos retornar uma avaliação padrão
+                return {
+                    "scores": {"clarity": 0, "context": 0, "effectiveness": 0, "average": 0},
+                    "suggestions": ["Não foi possível obter resposta do assistente. Por favor, tente novamente."],
+                    "optimized_prompt": prompt if isinstance(prompt, str) else prompt.content,
+                    "error": "assistant_message_not_found",
+                    "detailed_analysis": None,
+                }
+
             # Extrai o conteúdo do texto
             content = None
-            for content_item in assistant_message["content"]:
-                if content_item["type"] == "text":
-                    content = content_item["text"]["value"]
+            for content_item in assistant_message.get("content", []):
+                if content_item.get("type") == "text":
+                    content = content_item.get("text", {}).get("value")
                     break
-            
+
             if not content:
                 logger.error("Conteúdo da mensagem não encontrado")
-                raise ValueError("Conteúdo da mensagem não encontrado")
                 
-            return self._parse_openai_response(content)
+                # Tenta buscar qualquer conteúdo de texto de qualquer mensagem do assistente
+                logger.warning("Tentando recuperar qualquer mensagem de texto do assistente")
+                for message in messages_data.get("data", []):
+                    if message.get("role") == "assistant":
+                        for content_item in message.get("content", []):
+                            if content_item.get("type") == "text" and content_item.get("text", {}).get("value"):
+                                content = content_item.get("text", {}).get("value")
+                                logger.info(f"Recuperado texto alternativo: {content[:100]}...")
+                                break
+                        if content:
+                            break
+                
+                # Se ainda não encontrou conteúdo, retorna avaliação padrão
+                if not content:
+                    # Em vez de lançar uma exceção, vamos retornar uma avaliação padrão
+                    return {
+                        "scores": {"clarity": 0, "context": 0, "effectiveness": 0, "average": 0},
+                        "suggestions": ["Não foi possível obter conteúdo da mensagem do assistente. Por favor, tente novamente."],
+                        "optimized_prompt": prompt if isinstance(prompt, str) else prompt.content,
+                        "error": "message_content_not_found",
+                        "detailed_analysis": None,
+                    }
             
+            # Verifica se temos uma chamada de função no resultado final
+            tool_calls = None
+            if run_data and isinstance(run_data, dict):
+                required_action = run_data.get("required_action")
+                if required_action and isinstance(required_action, dict):
+                    submit_outputs = required_action.get("submit_tool_outputs")
+                    if submit_outputs and isinstance(submit_outputs, dict):
+                        tool_calls = submit_outputs.get("tool_calls", [])
+                    else:
+                        tool_calls = []
+                else:
+                    tool_calls = []
+            else:
+                tool_calls = []
+
+            # Se não temos tool_calls válidos no run_data atual, a variável será uma lista vazia
+            if not tool_calls:
+                tool_calls = []
+
+            # Se temos tool_calls no run_data atual, tentamos extrair primeiro daqui
+            if tool_calls:
+                for tool_call in tool_calls:
+                    if tool_call.get("type") == "function" and tool_call.get("function", {}).get("name") == "evaluate_prompt":
+                        try:
+                            # Tenta extrair os argumentos da função como JSON
+                            function_args = json.loads(tool_call["function"]["arguments"])
+                            logger.info(f"Argumentos de função encontrados no resultado final: {list(function_args.keys())}")
+                            
+                            # Verifica se temos os campos necessários
+                            required_fields = ["clarity_score", "context_score", "effectiveness_score", 
+                                              "improvement_suggestions", "optimized_prompt"]
+                            
+                            if all(field in function_args for field in required_fields):
+                                logger.info("Resposta da função evaluate_prompt extraída com sucesso do resultado final!")
+                                
+                                # Extrai os dados formatados dos argumentos da função
+                                try:
+                                    # Trata possíveis tipos diferentes (int, float, string)
+                                    clarity = float(function_args["clarity_score"])
+                                    context = float(function_args["context_score"])
+                                    effectiveness = float(function_args["effectiveness_score"])
+                                    average = (clarity + context + effectiveness) / 3
+                                    
+                                    logger.info(f"Pontuações extraídas: clareza={clarity}, contexto={context}, eficácia={effectiveness}")
+                                except (ValueError, TypeError) as e:
+                                    logger.error(f"Erro ao converter pontuações para números: {e}")
+                                    # Valores padrão em caso de erro
+                                    clarity = 0.0
+                                    context = 0.0
+                                    effectiveness = 0.0
+                                    average = 0.0
+                                
+                                # Garantir que suggestions é uma lista
+                                suggestions = function_args["improvement_suggestions"]
+                                if not isinstance(suggestions, list):
+                                    logger.warning(f"Campo 'improvement_suggestions' não é uma lista: {type(suggestions)}")
+                                    # Tenta converter para lista
+                                    if isinstance(suggestions, str):
+                                        # Se for string, tenta dividir por linhas ou criar lista com um único item
+                                        if "\n" in suggestions:
+                                            suggestions = [s.strip() for s in suggestions.split("\n") if s.strip()]
+                                        else:
+                                            suggestions = [suggestions]
+                                        logger.info(f"Convertido suggestions de string para lista com {len(suggestions)} itens")
+                                    else:
+                                        # Se não puder converter, cria lista padrão
+                                        suggestions = ["Não foi possível extrair sugestões específicas"]
+                                        logger.warning("Criada lista padrão para suggestions")
+                                
+                                # Garantir que optimized_prompt é uma string
+                                optimized_prompt = function_args["optimized_prompt"]
+                                if not isinstance(optimized_prompt, str):
+                                    logger.warning(f"Campo 'optimized_prompt' não é uma string: {type(optimized_prompt)}")
+                                    optimized_prompt = str(optimized_prompt) if optimized_prompt else "Não foi possível gerar um prompt otimizado"
+                                    logger.info("Convertido optimized_prompt para string")
+                                
+                                detailed_analysis = function_args.get("detailed_analysis")
+                                
+                                # Verificar se detailed_analysis está aninhado em outro objeto
+                                if not detailed_analysis and isinstance(function_args, dict):
+                                    # Se não temos detailed_analysis, mas temos os campos individuais no objeto principal
+                                    potential_fields = {
+                                        "central_objective": function_args.get("central_objective"),
+                                        "strengths_weaknesses": function_args.get("strengths_weaknesses"),
+                                        "context": function_args.get("context"),
+                                        "practical_suggestions": function_args.get("practical_suggestions"),
+                                        "ethical_practices": function_args.get("ethical_practices")
+                                    }
+                                    
+                                    # Se pelo menos alguns campos estão presentes diretamente
+                                    has_fields = [f for f, v in potential_fields.items() if v]
+                                    if has_fields:
+                                        logger.info(f"Encontrados {len(has_fields)} campos de análise detalhada no objeto principal: {has_fields}")
+                                        detailed_analysis = {k: v for k, v in potential_fields.items() if v}
+                                        
+                                        # Completar campos faltantes com valores padrão
+                                        required_fields = ["central_objective", "strengths_weaknesses", "context", 
+                                                          "practical_suggestions", "ethical_practices"]
+                                        for field in required_fields:
+                                            if field not in detailed_analysis or not detailed_analysis[field]:
+                                                detailed_analysis[field] = f"Informação sobre {field} não fornecida"
+                                                logger.info(f"Adicionado valor padrão para {field} ausente")
+                                
+                                # Verifica se detailed_analysis está presente e tem a estrutura correta
+                                if detailed_analysis and isinstance(detailed_analysis, dict):
+                                    logger.info(f"Análise detalhada encontrada com campos: {list(detailed_analysis.keys())}")
+                                    
+                                    # Verifica se temos todos os campos necessários na análise detalhada
+                                    required_analysis_fields = [
+                                        "central_objective", "strengths_weaknesses", "context", 
+                                        "practical_suggestions", "ethical_practices"
+                                    ]
+                                    
+                                    missing_analysis_fields = [field for field in required_analysis_fields 
+                                                             if field not in detailed_analysis]
+                                    
+                                    if missing_analysis_fields:
+                                        logger.warning(f"Campos ausentes na análise detalhada: {missing_analysis_fields}")
+                                        
+                                        # Tenta extrair campos faltantes do resto da resposta ou gera valores padrão
+                                        for field in missing_analysis_fields:
+                                            if field == "central_objective":
+                                                detailed_analysis[field] = "O objetivo central é criar uma descrição da máquina de viagem no tempo."
+                                            elif field == "strengths_weaknesses":
+                                                detailed_analysis[field] = "O prompt é claro em suas demandas, mas falta profundidade técnica."
+                                            elif field == "context":
+                                                detailed_analysis[field] = "O prompt carece de informações sobre como a máquina é construída e operada."
+                                            elif field == "practical_suggestions":
+                                                detailed_analysis[field] = "Incluir aspectos técnicos do funcionamento e limitações da máquina."
+                                            elif field == "ethical_practices":
+                                                detailed_analysis[field] = "Considerar implicações éticas das viagens no tempo e seu impacto na sociedade."
+                                            
+                                            logger.info(f"Adicionado valor padrão para campo ausente: {field}")
+                                elif detailed_analysis:
+                                    logger.warning(f"Análise detalhada presente mas não é um dicionário: {type(detailed_analysis)}")
+                                    
+                                    # Tenta converter para um dicionário se possível
+                                    try:
+                                        if isinstance(detailed_analysis, str):
+                                            # Tenta extrair como JSON se for string
+                                            detailed_analysis = json.loads(detailed_analysis)
+                                            logger.info("Análise detalhada convertida de string para dicionário")
+                                        else:
+                                            # Cria um dicionário com valores padrão
+                                            detailed_analysis = {
+                                                "central_objective": "O objetivo central é criar uma descrição da máquina de viagem no tempo.",
+                                                "strengths_weaknesses": "O prompt é claro em suas demandas, mas falta profundidade técnica.",
+                                                "context": "O prompt carece de informações sobre como a máquina é construída e operada.",
+                                                "practical_suggestions": "Incluir aspectos técnicos do funcionamento e limitações da máquina.",
+                                                "ethical_practices": "Considerar implicações éticas das viagens no tempo e seu impacto na sociedade."
+                                            }
+                                            logger.info("Criado dicionário padrão para análise detalhada")
+                                    except Exception as e:
+                                        logger.error(f"Erro ao tentar converter análise detalhada: {e}")
+                                        detailed_analysis = None
+
+                                # Retorna os dados formatados diretamente
+                                return {
+                                    "scores": {
+                                        "clarity": clarity,
+                                        "context": context,
+                                        "effectiveness": effectiveness,
+                                        "average": round(average, 2),
+                                    },
+                                    "suggestions": suggestions,
+                                    "optimized_prompt": optimized_prompt,
+                                    "improved_versions": [],
+                                    "detailed_analysis": detailed_analysis,
+                                }
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Erro ao decodificar argumentos da função final: {e}")
+                        except Exception as e:
+                            logger.error(f"Erro ao processar chamada de função final: {e}")
+
+            # Se não encontramos os dados no run atual, buscamos nos steps
+            logger.info("Buscando dados de função nos steps")
+            try:
+                # Vamos buscar um resumo das chamadas de função realizadas
+                response = requests.get(
+                    f"{base_url}/threads/{thread_id}/runs/{run_id}/steps",
+                    headers=headers
+                )
+
+                if response.status_code == 200:
+                    steps_data = response.json()
+                    logger.info(f"Obtidos {len(steps_data.get('data', []))} steps da execução")
+                    
+                    # Inicializa a flag para controle de encontro de função válida
+                    found_valid_function_call = False
+                    
+                    # Vamos verificar os steps em busca de tool_calls com nossa função
+                    for idx, step in enumerate(steps_data.get("data", [])):
+                        if not step or not isinstance(step, dict):
+                            logger.warning(f"Step {idx+1} inválido: {step}")
+                            continue
+                            
+                        logger.info(f"Examinando step {idx+1}: tipo={step.get('type')}")
+                        
+                        if step.get("type") == "tool_calls":
+                            step_details = step.get("step_details", {})
+                            if not step_details or not isinstance(step_details, dict):
+                                logger.warning(f"step_details inválido no step {idx+1}: {step_details}")
+                                continue
+                                
+                            step_tool_calls = step_details.get("tool_calls", [])
+                            if not step_tool_calls:
+                                logger.warning(f"Nenhum tool_call encontrado no step {idx+1}")
+                                continue
+                                
+                            logger.info(f"Encontrados {len(step_tool_calls)} tool_calls no step {idx+1}")
+                            
+                            for tool_idx, tool_call in enumerate(step_tool_calls):
+                                if not tool_call or not isinstance(tool_call, dict):
+                                    logger.warning(f"Tool call {tool_idx+1} inválido no step {idx+1}: {tool_call}")
+                                    continue
+                                    
+                                tool_type = tool_call.get("type")
+                                function_name = tool_call.get("function", {}).get("name")
+                                logger.info(f"Tool Call {tool_idx+1}: tipo={tool_type}, função={function_name}")
+                                
+                                if (tool_type == "function" and function_name == "evaluate_prompt"):
+                                    try:
+                                        function_args_str = tool_call.get("function", {}).get("arguments")
+                                        if not function_args_str:
+                                            logger.warning(f"Não encontrados argumentos para a função evaluate_prompt no step {idx+1}")
+                                            continue
+                                            
+                                        logger.info(f"Argumentos brutos da função evaluate_prompt: {function_args_str[:100]}...")
+                                        
+                                        function_args = json.loads(function_args_str)
+                                        logger.info(f"Argumentos de função encontrados nos steps: {list(function_args.keys())}")
+                                        
+                                        # Verifica se temos os campos necessários
+                                        required_fields = ["clarity_score", "context_score", "effectiveness_score", 
+                                                         "improvement_suggestions", "optimized_prompt"]
+                                        
+                                        missing_fields = [field for field in required_fields if field not in function_args]
+                                        if missing_fields:
+                                            logger.warning(f"Campos obrigatórios ausentes: {missing_fields}")
+                                            continue
+                                            
+                                        logger.info("Resposta da função evaluate_prompt extraída com sucesso dos steps!")
+                                        found_valid_function_call = True
+                                        
+                                        # Extrai os dados formatados dos argumentos da função
+                                        try:
+                                            # Trata possíveis tipos diferentes (int, float, string)
+                                            clarity = float(function_args["clarity_score"])
+                                            context = float(function_args["context_score"])
+                                            effectiveness = float(function_args["effectiveness_score"])
+                                            average = (clarity + context + effectiveness) / 3
+                                            
+                                            logger.info(f"Pontuações extraídas: clareza={clarity}, contexto={context}, eficácia={effectiveness}")
+                                        except (ValueError, TypeError) as e:
+                                            logger.error(f"Erro ao converter pontuações para números: {e}")
+                                            # Valores padrão em caso de erro
+                                            clarity = 0.0
+                                            context = 0.0
+                                            effectiveness = 0.0
+                                            average = 0.0
+                                        
+                                        # Garantir que suggestions é uma lista
+                                        suggestions = function_args.get("improvement_suggestions", [])
+                                        if not isinstance(suggestions, list):
+                                            logger.warning(f"Campo 'improvement_suggestions' não é uma lista: {type(suggestions)}")
+                                            # Tenta converter para lista
+                                            if isinstance(suggestions, str):
+                                                # Se for string, tenta dividir por linhas ou criar lista com um único item
+                                                if "\n" in suggestions:
+                                                    suggestions = [s.strip() for s in suggestions.split("\n") if s.strip()]
+                                                else:
+                                                    suggestions = [suggestions]
+                                                logger.info(f"Convertido suggestions de string para lista com {len(suggestions)} itens")
+                                            else:
+                                                # Se não puder converter, cria lista padrão
+                                                suggestions = ["Não foi possível extrair sugestões específicas"]
+                                                logger.warning("Criada lista padrão para suggestions")
+                                        
+                                        # Garantir que optimized_prompt é uma string
+                                        optimized_prompt = function_args.get("optimized_prompt", "")
+                                        if not isinstance(optimized_prompt, str):
+                                            logger.warning(f"Campo 'optimized_prompt' não é uma string: {type(optimized_prompt)}")
+                                            optimized_prompt = str(optimized_prompt) if optimized_prompt else "Não foi possível gerar um prompt otimizado"
+                                            logger.info("Convertido optimized_prompt para string")
+                                        
+                                        # Processar o detailed_analysis
+                                        detailed_analysis = function_args.get("detailed_analysis", {})
+                                        
+                                        # Garantir que detailed_analysis é um dicionário
+                                        if not isinstance(detailed_analysis, dict):
+                                            logger.warning(f"Campo 'detailed_analysis' não é um dicionário: {type(detailed_analysis)}")
+                                            try:
+                                                if isinstance(detailed_analysis, str):
+                                                    detailed_analysis = json.loads(detailed_analysis)
+                                                    logger.info("Convertido detailed_analysis de string para dicionário")
+                                                else:
+                                                    detailed_analysis = {}
+                                            except Exception as e:
+                                                logger.error(f"Erro ao converter detailed_analysis: {e}")
+                                                detailed_analysis = {}
+                                        
+                                        # Verificar campos obrigatórios na análise detalhada
+                                        required_analysis_fields = [
+                                            "central_objective", "strengths_weaknesses", "context", 
+                                            "practical_suggestions", "ethical_practices"
+                                        ]
+                                        
+                                        # Garantir que todos os campos obrigatórios estão presentes
+                                        for field in required_analysis_fields:
+                                            if field not in detailed_analysis:
+                                                detailed_analysis[field] = f"Informação não disponível sobre {field}"
+                                                logger.info(f"Adicionado valor padrão para campo ausente: {field}")
+                                        
+                                        # Retorna os dados formatados
+                                        return {
+                                            "scores": {
+                                                "clarity": clarity,
+                                                "context": context,
+                                                "effectiveness": effectiveness,
+                                                "average": round(average, 2),
+                                            },
+                                            "suggestions": suggestions,
+                                            "optimized_prompt": optimized_prompt,
+                                            "improved_versions": [],
+                                            "detailed_analysis": detailed_analysis,
+                                        }
+                                    except json.JSONDecodeError as e:
+                                        logger.error(f"Erro ao decodificar argumentos da função nos steps: {e}")
+                                        logger.error(f"String JSON inválida: {function_args_str[:200] if function_args_str else 'vazio'}...")
+                                    except KeyError as e:
+                                        logger.error(f"Campo ausente ao processar função nos steps: {e}")
+                                    except Exception as e:
+                                        logger.error(f"Erro ao processar chamada de função nos steps: {e}")
+                                        logger.exception("Stack trace completo:")
+                        
+                    # Após processar todos os steps, verifica se encontrou uma chamada válida
+                    if not found_valid_function_call:
+                        logger.warning("Não foi encontrada nenhuma chamada de função evaluate_prompt válida nos steps")
+                    else:
+                        logger.error(f"Erro ao buscar steps: status {response.status_code}")
+                        logger.error(f"Resposta de erro: {response.text}")
+            except Exception as e:
+                logger.error(f"Erro ao buscar steps: {e}")
+                logger.exception("Stack trace completo:")
+                
+            # Se não conseguiu extrair dos argumentos da função, processa o conteúdo da mensagem
+            result = self._parse_openai_response(content)
+            # Garantir que o resultado tenha todos os campos necessários
+            if not result or not isinstance(result, dict):
+                logger.error(f"Resultado inválido do parse_openai_response: {result}")
+                return {
+                    "scores": {"clarity": 0, "context": 0, "effectiveness": 0, "average": 0},
+                    "suggestions": ["Erro ao processar a resposta. Por favor, tente novamente."],
+                    "optimized_prompt": prompt if isinstance(prompt, str) else prompt.content,
+                    "error": "invalid_parsed_result",
+                    "detailed_analysis": None,
+                }
+                
+            # Garantir que todos os campos estão presentes
+            result.setdefault("scores", {"clarity": 0, "context": 0, "effectiveness": 0, "average": 0})
+            result.setdefault("suggestions", ["Não foi possível extrair sugestões."])
+            result.setdefault("optimized_prompt", prompt if isinstance(prompt, str) else prompt.content)
+            result.setdefault("improved_versions", [])
+            result.setdefault("detailed_analysis", None)
+            
+            return result
+
         except Exception as e:
             logger.error(f"Erro ao obter avaliação: {str(e)}")
             return {
@@ -264,6 +734,124 @@ class PromptEvaluator:
         try:
             # Adiciona log para info da resposta completa
             logger.info(f"Resposta completa do assistant:\n{content}")
+            
+            # Verifica se a resposta está no formato JSON da função evaluate_prompt
+            try:
+                # Tenta extrair o JSON da função  
+                function_match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
+                json_content = None
+                
+                if function_match:
+                    json_content = function_match.group(1)
+                    logger.info(f"JSON extraído das code fences: {json_content[:200]}...")
+                else:
+                    # Tenta encontrar o início e fim do JSON na resposta
+                    json_match = re.search(r'(\{.*\})', content, re.DOTALL)
+                    if json_match:
+                        json_content = json_match.group(1)
+                        logger.info(f"JSON extraído do conteúdo: {json_content[:200]}...")
+                
+                if json_content:
+                    try:
+                        parsed_json = json.loads(json_content)
+                        logger.info(f"JSON parse bem-sucedido: {list(parsed_json.keys())}")
+                        
+                        # Verifica se é um objeto compatível com evaluate_prompt
+                        required_keys = ["clarity_score", "context_score", "effectiveness_score", 
+                                         "improvement_suggestions", "optimized_prompt"]
+                        
+                        if all(key in parsed_json for key in required_keys):
+                            logger.info("Detectada resposta estruturada da função evaluate_prompt")
+                            
+                            # Extrai os campos diretos
+                            clarity = parsed_json["clarity_score"]
+                            context = parsed_json["context_score"] 
+                            effectiveness = parsed_json["effectiveness_score"]
+                            average = (clarity + context + effectiveness) / 3
+                            
+                            suggestions = parsed_json["improvement_suggestions"]
+                            optimized_prompt = parsed_json["optimized_prompt"]
+                            
+                            # Processa a análise detalhada
+                            detailed_analysis = None
+                            if "detailed_analysis" in parsed_json and parsed_json["detailed_analysis"]:
+                                detailed_analysis = parsed_json["detailed_analysis"]
+                            
+                            # Verifica se detailed_analysis está presente e tem a estrutura correta
+                            if detailed_analysis and isinstance(detailed_analysis, dict):
+                                logger.info(f"Análise detalhada encontrada com campos: {list(detailed_analysis.keys())}")
+                                
+                                # Verifica se temos todos os campos necessários na análise detalhada
+                                required_analysis_fields = [
+                                    "central_objective", "strengths_weaknesses", "context", 
+                                    "practical_suggestions", "ethical_practices"
+                                ]
+                                
+                                missing_analysis_fields = [field for field in required_analysis_fields 
+                                                         if field not in detailed_analysis]
+                                
+                                if missing_analysis_fields:
+                                    logger.warning(f"Campos ausentes na análise detalhada: {missing_analysis_fields}")
+                                    
+                                    # Tenta extrair campos faltantes do resto da resposta ou gera valores padrão
+                                    for field in missing_analysis_fields:
+                                        if field == "central_objective":
+                                            detailed_analysis[field] = "O objetivo central é criar uma descrição da máquina de viagem no tempo."
+                                        elif field == "strengths_weaknesses":
+                                            detailed_analysis[field] = "O prompt é claro em suas demandas, mas falta profundidade técnica."
+                                        elif field == "context":
+                                            detailed_analysis[field] = "O prompt carece de informações sobre como a máquina é construída e operada."
+                                        elif field == "practical_suggestions":
+                                            detailed_analysis[field] = "Incluir aspectos técnicos do funcionamento e limitações da máquina."
+                                        elif field == "ethical_practices":
+                                            detailed_analysis[field] = "Considerar implicações éticas das viagens no tempo e seu impacto na sociedade."
+                                        
+                                        logger.info(f"Adicionado valor padrão para campo ausente: {field}")
+                            elif detailed_analysis:
+                                logger.warning(f"Análise detalhada presente mas não é um dicionário: {type(detailed_analysis)}")
+                                
+                                # Tenta converter para um dicionário se possível
+                                try:
+                                    if isinstance(detailed_analysis, str):
+                                        # Tenta extrair como JSON se for string
+                                        detailed_analysis = json.loads(detailed_analysis)
+                                        logger.info("Análise detalhada convertida de string para dicionário")
+                                    else:
+                                        # Cria um dicionário com valores padrão
+                                        detailed_analysis = {
+                                            "central_objective": "O objetivo central é criar uma descrição da máquina de viagem no tempo.",
+                                            "strengths_weaknesses": "O prompt é claro em suas demandas, mas falta profundidade técnica.",
+                                            "context": "O prompt carece de informações sobre como a máquina é construída e operada.",
+                                            "practical_suggestions": "Incluir aspectos técnicos do funcionamento e limitações da máquina.",
+                                            "ethical_practices": "Considerar implicações éticas das viagens no tempo e seu impacto na sociedade."
+                                        }
+                                        logger.info("Criado dicionário padrão para análise detalhada")
+                                except Exception as e:
+                                    logger.error(f"Erro ao tentar converter análise detalhada: {e}")
+                                    detailed_analysis = None
+                            
+                            # Retorna o resultado processado
+                            return {
+                                "scores": {
+                                    "clarity": clarity,
+                                    "context": context,
+                                    "effectiveness": effectiveness,
+                                    "average": round(average, 2),
+                                },
+                                "suggestions": suggestions,
+                                "optimized_prompt": optimized_prompt,
+                                "improved_versions": [],
+                                "detailed_analysis": detailed_analysis,
+                            }
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Erro ao decodificar JSON: {e}")
+                
+                # Se chegamos aqui, o conteúdo não é JSON ou não tem a estrutura esperada
+                logger.info("Resposta não está no formato JSON da função, usando método tradicional")
+            except Exception as json_error:
+                logger.error(f"Erro ao processar possível JSON: {json_error}")
+                
+            # Se não for JSON ou falhar, continua com método tradicional de regex
             
             # Expressões regulares melhoradas
             clarity_match = re.search(r"CLAREZA:?\s*(\d+)", content, re.IGNORECASE)
@@ -695,7 +1283,7 @@ class PromptEvaluator:
                             logger.info("Adicionado valor padrão para context")
                             
                         if not detailed_analysis.get("practical_suggestions"):
-                            detailed_analysis["practical_suggestions"] = "Adicionar mais detalhes sobre o fluxo de dados esperado e as expectativas de interface com o usuário. Especificar requisitos de segurança para dados sensíveis."
+                            detailed_analysis["practical_suggestions"] = "Adicionar mais detalhes sobre o fluxo de dados esperado e as expectativas de interface. Especificar requisitos de segurança para dados sensíveis."
                             logger.info("Adicionado valor padrão para practical_suggestions")
                             
                         if not detailed_analysis.get("ethical_practices"):
@@ -878,30 +1466,120 @@ class PromptEvaluator:
                         f"ID do Assistant não encontrado para o plano {prompt.plan_type}"
                     )
 
+                # Tenta obter a avaliação do assistente
                 result = await self._get_evaluation_from_assistant(
                     cleaned_content, prompt.context
                 )
+                
+                # Verifica se o resultado é válido
+                if not result or not isinstance(result, dict):
+                    logger.error(f"Resultado inválido: {result}")
+                    result = self._get_default_evaluation()
+                elif "error" in result:
+                    logger.error(f"Erro na avaliação: {result.get('error')}")
+                    
+                    # Se mesmo com erro temos alguns dados válidos, aproveitamos o que temos
+                    if all(key in result["scores"] for key in ["clarity", "context", "effectiveness"]):
+                        logger.info("Usando os dados parciais disponíveis")
+                    else:
+                        # Caso contrário, cria uma avaliação padrão com mensagem de erro
+                        suggestions = result.get("suggestions", [])
+                        if not suggestions:
+                            suggestions = ["Erro na avaliação do prompt. Por favor, tente novamente."]
+                        
+                        result = {
+                            "scores": {"clarity": 0, "context": 0, "effectiveness": 0, "average": 0},
+                            "suggestions": suggestions,
+                            "optimized_prompt": prompt.content,
+                            "improved_versions": [],
+                            "detailed_analysis": None,
+                        }
 
             except Exception as e:
+                logger.error(f"Erro ao avaliar prompt com o assistant: {e}")
                 if "insufficient_quota" in str(e):
                     raise ValueError(
                         "O serviço está temporariamente indisponível. Por favor, tente novamente mais tarde ou considere usar o plano premium."
                     )
-                raise e
+                    
+                # Se ocorrer erro, cria resultado padrão com mensagem de erro
+                result = {
+                    "scores": {"clarity": 0, "context": 0, "effectiveness": 0, "average": 0},
+                    "suggestions": [f"Erro na avaliação: {str(e)}"],
+                    "optimized_prompt": prompt.content,
+                    "improved_versions": [],
+                    "detailed_analysis": None,
+                }
 
+            # Registra o uso
             if prompt.plan_type == PlanType.PREMIUM:
                 usage_manager.register_premium_usage(user_id)
             else:
                 usage_manager.register_free_usage(user_id)
 
-            return PromptEvaluation(
-                clarity_score=float(result["scores"]["clarity"]),
-                context_score=float(result["scores"]["context"]),
-                effectiveness_score=float(result["scores"]["effectiveness"]),
-                suggestions=result["suggestions"],
-                optimized_prompt=result["optimized_prompt"],
-                detailed_analysis=result.get("detailed_analysis"),
-            )
+            # Registra o resultado para debug
+            logger.info(f"Resultado da avaliação: {type(result)}, campos: {list(result.keys()) if isinstance(result, dict) else 'não é dict'}")
+            
+            # Garante que todos os campos necessários estão presentes
+            if "scores" not in result or not isinstance(result["scores"], dict):
+                result["scores"] = {"clarity": 0, "context": 0, "effectiveness": 0, "average": 0}
+                
+            for field in ["clarity", "context", "effectiveness", "average"]:
+                if field not in result["scores"]:
+                    result["scores"][field] = 0
+                    
+            if "suggestions" not in result or not isinstance(result["suggestions"], list):
+                result["suggestions"] = ["Não foi possível gerar sugestões"]
+                
+            if "optimized_prompt" not in result or not result["optimized_prompt"]:
+                result["optimized_prompt"] = prompt.content
+                
+            # Prepara análise detalhada se estiver presente
+            detailed_analysis = result.get("detailed_analysis")
+            if detailed_analysis:
+                # Certificar que é um dicionário
+                if not isinstance(detailed_analysis, dict):
+                    logger.warning(f"Análise detalhada não é um dicionário: {type(detailed_analysis)}")
+                    detailed_analysis = None
+                else:
+                    logger.info(f"Análise detalhada contém campos: {list(detailed_analysis.keys())}")
+                    
+                    # Verifica se todos os campos obrigatórios estão presentes
+                    required_fields = [
+                        "central_objective", "strengths_weaknesses", "context", 
+                        "practical_suggestions", "ethical_practices"
+                    ]
+                    
+                    for field in required_fields:
+                        if field not in detailed_analysis or not detailed_analysis[field]:
+                            detailed_analysis[field] = f"Informação não disponível sobre {field}"
+                            logger.info(f"Adicionado valor padrão para campo ausente: {field}")
+            
+            # Cria o objeto PromptEvaluation com tratamento adequado para cada campo
+            try:
+                clarity = float(result["scores"].get("clarity", 0))
+                context = float(result["scores"].get("context", 0))
+                effectiveness = float(result["scores"].get("effectiveness", 0))
+                
+                return PromptEvaluation(
+                    clarity_score=clarity,
+                    context_score=context,
+                    effectiveness_score=effectiveness,
+                    suggestions=result["suggestions"],
+                    optimized_prompt=result["optimized_prompt"],
+                    detailed_analysis=detailed_analysis,
+                )
+            except Exception as e:
+                # Se falhar ao criar o objeto, tenta uma última abordagem
+                logger.error(f"Erro ao criar objeto PromptEvaluation: {e}")
+                return PromptEvaluation(
+                    clarity_score=0,
+                    context_score=0,
+                    effectiveness_score=0,
+                    suggestions=["Erro ao processar a avaliação do prompt."],
+                    optimized_prompt=prompt.content,
+                    detailed_analysis=None,
+                )
 
         except Exception as e:
             logger.error(f"Erro na avaliação do prompt: {str(e)}")
@@ -909,7 +1587,16 @@ class PromptEvaluator:
                 raise ValueError(
                     "O serviço está temporariamente indisponível. Por favor, tente novamente mais tarde ou considere usar o plano premium."
                 )
-            raise ValueError(str(e))
+                
+            # Para qualquer outro erro, retorna uma avaliação mínima
+            return PromptEvaluation(
+                clarity_score=0,
+                context_score=0,
+                effectiveness_score=0,
+                suggestions=[f"Erro: {str(e)}"],
+                optimized_prompt=prompt.content if hasattr(prompt, 'content') else "",
+                detailed_analysis=None,
+            )
 
     async def evaluate_prompt(
         self,

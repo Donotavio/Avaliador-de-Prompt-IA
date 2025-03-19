@@ -1,0 +1,213 @@
+/* 
+  Animações - Prompt Evaluator
+  Coleção de animações e transições para o site
+*/
+
+/* Transições básicas */
+.transition-all {
+  transition: all var(--transition-normal);
+}
+
+.transition-opacity {
+  transition: opacity var(--transition-normal);
+}
+
+.transition-transform {
+  transition: transform var(--transition-normal);
+}
+
+.transition-colors {
+  transition: color var(--transition-normal), background-color var(--transition-normal), border-color var(--transition-normal);
+}
+
+/* Entrada e saída com fade */
+.fade-in {
+  animation: fadeIn var(--transition-normal) ease forwards;
+}
+
+.fade-out {
+  animation: fadeOut var(--transition-normal) ease forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* Animações de slide */
+.slide-up {
+  animation: slideUp var(--transition-normal) ease forwards;
+}
+
+.slide-down {
+  animation: slideDown var(--transition-normal) ease forwards;
+}
+
+.slide-left {
+  animation: slideLeft var(--transition-normal) ease forwards;
+}
+
+.slide-right {
+  animation: slideRight var(--transition-normal) ease forwards;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideLeft {
+  from { transform: translateX(30px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideRight {
+  from { transform: translateX(-30px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Animações avançadas */
+.scale-in {
+  animation: scaleIn var(--transition-normal) cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.scale-out {
+  animation: scaleOut var(--transition-normal) cubic-bezier(0.6, -0.28, 0.735, 0.045) forwards;
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes scaleOut {
+  from { transform: scale(1); opacity: 1; }
+  to { transform: scale(0.95); opacity: 0; }
+}
+
+/* Animação de entrada para listas ou grids */
+.stagger-in > * {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: staggerIn var(--transition-normal) forwards ease-out;
+}
+
+@keyframes staggerIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Definição de delays para animações encadeadas */
+.stagger-in > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-in > *:nth-child(2) { animation-delay: 50ms; }
+.stagger-in > *:nth-child(3) { animation-delay: 100ms; }
+.stagger-in > *:nth-child(4) { animation-delay: 150ms; }
+.stagger-in > *:nth-child(5) { animation-delay: 200ms; }
+.stagger-in > *:nth-child(6) { animation-delay: 250ms; }
+.stagger-in > *:nth-child(7) { animation-delay: 300ms; }
+.stagger-in > *:nth-child(8) { animation-delay: 350ms; }
+.stagger-in > *:nth-child(9) { animation-delay: 400ms; }
+.stagger-in > *:nth-child(10) { animation-delay: 450ms; }
+
+/* Animação de pulse (útil para notificações ou chamar atenção) */
+.pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Animação de entrada com bounce */
+.bounce-in {
+  animation: bounceIn 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes bounceIn {
+  0% { transform: scale(0.3); opacity: 0; }
+  50% { transform: scale(1.05); opacity: 0.9; }
+  70% { transform: scale(0.9); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Animação para rotação */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+.spin-slow {
+  animation: spin 3s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Animação de shimmer (para esquelétons de carregamento) */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Animação para transição de páginas */
+.page-enter {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 300ms, transform 300ms;
+}
+
+.page-exit {
+  opacity: 1;
+}
+
+.page-exit-active {
+  opacity: 0;
+  transition: opacity 300ms;
+}
+
+/* Classes para diferentes durações */
+.duration-75 { transition-duration: 75ms; animation-duration: 75ms; }
+.duration-100 { transition-duration: 100ms; animation-duration: 100ms; }
+.duration-150 { transition-duration: 150ms; animation-duration: 150ms; }
+.duration-200 { transition-duration: 200ms; animation-duration: 200ms; }
+.duration-300 { transition-duration: 300ms; animation-duration: 300ms; }
+.duration-500 { transition-duration: 500ms; animation-duration: 500ms; }
+.duration-700 { transition-duration: 700ms; animation-duration: 700ms; }
+.duration-1000 { transition-duration: 1000ms; animation-duration: 1000ms; }
+
+/* Opções de delay */
+.delay-75 { transition-delay: 75ms; animation-delay: 75ms; }
+.delay-100 { transition-delay: 100ms; animation-delay: 100ms; }
+.delay-150 { transition-delay: 150ms; animation-delay: 150ms; }
+.delay-200 { transition-delay: 200ms; animation-delay: 200ms; }
+.delay-300 { transition-delay: 300ms; animation-delay: 300ms; }
+.delay-500 { transition-delay: 500ms; animation-delay: 500ms; }
+.delay-700 { transition-delay: 700ms; animation-delay: 700ms; }
+.delay-1000 { transition-delay: 1000ms; animation-delay: 1000ms; } 

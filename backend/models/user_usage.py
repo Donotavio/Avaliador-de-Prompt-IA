@@ -26,42 +26,15 @@ class UserUsage:
         if not self.is_premium_active:
             return False, "Plano premium não está ativo", False
 
-        if self.last_evaluation_date is None:
-            return True, "Primeira avaliação premium", False
-
-        today = datetime.now().date()
-        if self.last_evaluation_date.date() < today:
-            self.premium_evaluations_count = 0
-            return (
-                True,
-                f"Você tem {USAGE_LIMITS['premium']['daily_limit']} avaliações premium disponíveis hoje",
-                False,
-            )
-
-        if self.premium_evaluations_count >= USAGE_LIMITS["premium"]["daily_limit"]:
-            return (
-                False,
-                f"Limite diário de {USAGE_LIMITS['premium']['daily_limit']} avaliações premium atingido",
-                False,
-            )
-
-        remaining = (
-            USAGE_LIMITS["premium"]["daily_limit"] - self.premium_evaluations_count
-        )
-        return True, f"Você tem {remaining} avaliações premium restantes hoje", False
+        return True, "Uso ilimitado (Plano Premium)", False
 
     def can_use_free(self) -> Tuple[bool, str]:
         """Verifica se o usuário pode usar o plano gratuito"""
-        if self.last_evaluation_date is None:
-            return True, "Primeira avaliação gratuita"
-
         today = datetime.now().date()
-        if self.last_evaluation_date.date() < today:
+        if self.last_evaluation_date is None or self.last_evaluation_date.date() < today:
             self.free_evaluations_count = 0
-            return (
-                True,
-                f"Você tem {USAGE_LIMITS['free']['daily_limit']} avaliações gratuitas disponíveis hoje",
-            )
+            # Não retornar mensagem de status para uso normal
+            return True, ""
 
         if self.free_evaluations_count >= USAGE_LIMITS["free"]["daily_limit"]:
             return (
@@ -69,8 +42,8 @@ class UserUsage:
                 f"Limite diário de {USAGE_LIMITS['free']['daily_limit']} avaliações gratuitas atingido",
             )
 
-        remaining = USAGE_LIMITS["free"]["daily_limit"] - self.free_evaluations_count
-        return True, f"Você tem {remaining} avaliações gratuitas restantes hoje"
+        # Não retornar mensagem de status para uso normal
+        return True, ""
 
     def increment_premium_usage(self):
         """Incrementa o contador de uso premium"""

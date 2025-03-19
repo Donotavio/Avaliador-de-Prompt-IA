@@ -3,15 +3,46 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import PromptForm from './components/PromptForm';
 import PremiumModal from './components/PremiumModal';
 import PaymentSuccessPage from './components/PaymentSuccessPage';
-import './App.css';
+import { InfoIcon, UserIcon, LogoutIcon, LoginIcon } from './components/Icons';
+
+// Ícone de prompt para o logo
+const PromptIcon = () => (
+  <svg className="logo-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    <path d="M13 8l2 2-2 2"></path>
+    <path d="M9 12h4"></path>
+  </svg>
+);
+
+// Ícone de coroa para usuários premium
+const CrownIcon = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3 17L6 9L9 15L12 8L15 14L18 9L21 17L19 18H5L3 17Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M3 21H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
 
 // Componente para exibir informações do usuário logado
-const UserDisplay: React.FC<{ userName: string; onLogout: () => void }> = ({ userName, onLogout }) => {
+const UserDisplay: React.FC<{ userName: string; isPremium: boolean; onLogout: () => void }> = ({ userName, isPremium, onLogout }) => {
   return (
     <div className="user-display">
-      <span className="user-name">Olá, {userName}</span>
+      <span className="user-name">
+        <UserIcon size={18} className="user-icon" /> {userName}
+        {isPremium && (
+          <span className="premium-badge" title="Usuário Premium">
+            <CrownIcon size={16} />
+            Premium
+          </span>
+        )}
+        {!isPremium && (
+          <span className="free-badge" title="Usuário Free">
+            Free
+          </span>
+        )}
+      </span>
       <button className="logout-button" onClick={onLogout}>
-        Sair
+        <LogoutIcon size={18} />
+        <span>Sair</span>
       </button>
     </div>
   );
@@ -21,7 +52,8 @@ const UserDisplay: React.FC<{ userName: string; onLogout: () => void }> = ({ use
 const LoginButton: React.FC<{ onClick: () => void }> = ({ onClick }) => {
   return (
     <button className="login-button" onClick={onClick}>
-      Entrar
+      <LoginIcon size={18} />
+      <span>Entrar</span>
     </button>
   );
 };
@@ -105,8 +137,29 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
         });
 
         if (!registerResponse.ok) {
-          const data = await registerResponse.json();
-          throw new Error(data.detail || 'Erro ao registrar usuário');
+          const errorData = await registerResponse.json();
+          console.error('Erro de registro:', errorData);
+          
+          // Tenta extrair mensagens de erro específicas
+          if (errorData.detail) {
+            // Se o erro for um objeto, converte para string
+            if (typeof errorData.detail === 'object') {
+              if (errorData.detail.msg) {
+                throw new Error(errorData.detail.msg);
+              } else {
+                throw new Error('Dados inválidos. Verifique as informações e tente novamente.');
+              }
+            } else {
+              // Se for formato de campo específico, como 'Email inválido'
+              if (errorData.detail.includes('email')) {
+                throw new Error('Email inválido. Informe um endereço de email no formato correto (ex: nome@dominio.com)');
+              } else {
+                throw new Error(errorData.detail);
+              }
+            }
+          } else {
+            throw new Error('Erro ao registrar usuário. Verifique os dados e tente novamente.');
+          }
         }
 
         // Login automático após registro
@@ -147,80 +200,96 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
   };
 
   return (
-    <div className="login-modal-overlay" onClick={onClose}>
-      <div className="login-modal-content" onClick={e => e.stopPropagation()}>
-        <button className="close-button" onClick={onClose}>×</button>
-        <h2>{isLogin ? 'Entrar' : 'Criar Conta'}</h2>
+    <div className="auth-modal-overlay" onClick={onClose}>
+      <div className="auth-modal-container" onClick={e => e.stopPropagation()}>
+        <button className="auth-close-button" onClick={onClose}>×</button>
         
-        {error && <div className="error-message">{error}</div>}
+        <div className="auth-modal-header">
+          <h2 className="auth-modal-title">{isLogin ? 'Entrar' : 'Criar Conta'}</h2>
+        </div>
         
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label htmlFor="email">Email*</label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          {!isLogin && (
-            <div className="form-group">
-              <label htmlFor="full_name">Nome Completo*</label>
+        <div className="auth-modal-content">
+          {error && <div className="auth-error-message">{error}</div>}
+          
+          <form onSubmit={handleSubmit}>
+            <div className="auth-form-group">
+              <label htmlFor="email">Email*</label>
               <input
-                type="text"
-                id="full_name"
-                name="full_name"
-                value={formData.full_name}
+                type="email"
+                id="email"
+                name="email"
+                value={formData.email}
                 onChange={handleChange}
                 required
               />
             </div>
-          )}
 
-          <div className="form-group">
-            <label htmlFor="password">Senha*</label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-            />
-          </div>
+            {!isLogin && (
+              <div className="auth-form-group">
+                <label htmlFor="full_name">Nome Completo*</label>
+                <input
+                  type="text"
+                  id="full_name"
+                  name="full_name"
+                  value={formData.full_name}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+            )}
 
-          {!isLogin && (
-            <div className="form-group">
-              <label htmlFor="password_confirm">Confirmar Senha*</label>
+            <div className="auth-form-group">
+              <label htmlFor="password">Senha*</label>
               <input
                 type="password"
-                id="password_confirm"
-                name="password_confirm"
-                value={formData.password_confirm}
+                id="password"
+                name="password"
+                value={formData.password}
                 onChange={handleChange}
                 required
               />
+              {!isLogin && (
+                <div className="auth-form-password-hint">
+                  <InfoIcon />
+                  <span>Mínimo de 8 caracteres</span>
+                </div>
+              )}
             </div>
-          )}
 
-          <div className="form-actions">
-            <button type="submit" className="login-submit-button" disabled={isLoading}>
-              {isLoading ? 'Processando...' : isLogin ? 'Entrar' : 'Cadastrar'}
+            {!isLogin && (
+              <div className="auth-form-group">
+                <label htmlFor="password_confirm">Confirmar Senha*</label>
+                <input
+                  type="password"
+                  id="password_confirm"
+                  name="password_confirm"
+                  value={formData.password_confirm}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+            )}
+
+            <button type="submit" className="auth-submit-button" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <div className="spinner"></div>
+                  <span>Processando...</span>
+                </>
+              ) : (
+                isLogin ? 'Entrar' : 'Cadastrar'
+              )}
             </button>
-          </div>
-        </form>
-
-        <div className="toggle-mode">
-          <p>
+          </form>
+        </div>
+        
+        <div className="auth-modal-footer">
+          <div className="auth-alternate-action">
             {isLogin ? 'Não tem uma conta?' : 'Já tem uma conta?'}
-            <button type="button" onClick={toggleMode} className="toggle-button">
+            <button type="button" onClick={toggleMode}>
               {isLogin ? 'Cadastre-se' : 'Entrar'}
             </button>
-          </p>
+          </div>
         </div>
       </div>
     </div>
@@ -235,6 +304,7 @@ const App: React.FC = () => {
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState<boolean>(false);
+  const [isPremium, setIsPremium] = useState<boolean>(false);
 
   // Verifica se há um usuário logado no localStorage
   useEffect(() => {
@@ -246,6 +316,14 @@ const App: React.FC = () => {
         setUserName(userObj.fullName || userObj.email);
         setIsLoggedIn(true);
         setIsAdmin(userObj.id === 'admin');
+        
+        // Se o objeto do usuário já tiver a flag isPremium
+        if (userObj.hasOwnProperty('isPremium')) {
+          setIsPremium(userObj.isPremium);
+        }
+        
+        // Verifica o status premium do usuário
+        checkPremiumStatus();
       } catch (e) {
         console.error('Erro ao parsear dados do usuário:', e);
         // Em caso de erro, limpa o localStorage para evitar problemas
@@ -255,6 +333,62 @@ const App: React.FC = () => {
     }
   }, []);
   
+  // Verificar o status premium quando o aplicativo é montado e a cada 30 segundos
+  useEffect(() => {
+    // Verificação inicial
+    checkPremiumStatus();
+    
+    // Configurar verificação periódica
+    const intervalId = setInterval(() => {
+      if (isLoggedIn) {
+        checkPremiumStatus();
+      }
+    }, 30000); // 30 segundos
+    
+    // Limpar o intervalo quando o componente for desmontado
+    return () => clearInterval(intervalId);
+  }, [isLoggedIn]);
+  
+  // Função para verificar o status premium do usuário
+  const checkPremiumStatus = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      const response = await fetch('/api/payments/status', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const newPremiumStatus = data.is_active || false;
+        
+        // Só atualiza o estado se o status mudou
+        if (newPremiumStatus !== isPremium) {
+          setIsPremium(newPremiumStatus);
+          
+          // Atualiza também no localStorage para persistência
+          const storedUser = localStorage.getItem('user');
+          if (storedUser) {
+            try {
+              const userObj = JSON.parse(storedUser);
+              userObj.isPremium = newPremiumStatus;
+              localStorage.setItem('user', JSON.stringify(userObj));
+            } catch (e) {
+              console.error('Erro ao atualizar status premium no localStorage:', e);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao verificar status premium:', error);
+    }
+  };
+  
   // Função para efetuar logout (limpeza de dados)
   const handleLogout = () => {
     localStorage.removeItem('user');
@@ -263,6 +397,7 @@ const App: React.FC = () => {
     setUserName("");
     setIsLoggedIn(false);
     setIsAdmin(false);
+    setIsPremium(false);
     // Opcional: recarregar a página para garantir um estado limpo
     window.location.reload();
   };
@@ -277,36 +412,63 @@ const App: React.FC = () => {
     <Router>
       <div className="app">
         <header className="app-header">
-          <div className="logo">
-            <a href="/">
-              <h1>Avaliador de Prompts <span className="logo-ai">AI</span></h1>
-            </a>
-          </div>
-          <div className="user-actions">
-            {isLoggedIn ? (
-              <UserDisplay userName={userName} onLogout={handleLogout} />
-            ) : (
-              <LoginButton onClick={() => setShowLoginModal(true)} />
-            )}
+          <div className="container">
+            <div className="app-header-content">
+              <div className="logo">
+                <a href="/">
+                  <PromptIcon />
+                  Avaliador de Prompts
+                </a>
+              </div>
+              <div className="user-actions">
+                {isLoggedIn ? (
+                  <UserDisplay 
+                    userName={userName} 
+                    isPremium={isPremium}
+                    onLogout={handleLogout} 
+                  />
+                ) : (
+                  <LoginButton onClick={() => setShowLoginModal(true)} />
+                )}
+              </div>
+            </div>
           </div>
         </header>
 
         <main className="app-main">
-          <Routes>
-            <Route path="/" element={
-              <PromptForm 
-                userId={userId} 
-                isAdmin={isAdmin} 
-                openPremiumModal={() => setIsPremiumModalOpen(true)} 
-              />
-            } />
-            <Route path="/payment-success" element={
-              <PaymentSuccessPage userId={userId} />
-            } />
-            {/* Rota fallback para páginas não encontradas */}
-            <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
+          <div className="container">
+            <Routes>
+              <Route path="/" element={
+                <PromptForm 
+                  userId={userId} 
+                  isAdmin={isAdmin}
+                  isPremium={isPremium}
+                  openPremiumModal={() => setIsPremiumModalOpen(true)} 
+                />
+              } />
+              <Route path="/payment-success" element={
+                <PaymentSuccessPage userId={userId} />
+              } />
+              {/* Rota fallback para páginas não encontradas */}
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+          </div>
         </main>
+
+        <footer className="app-footer">
+          <div className="container">
+            <div className="app-footer-content">
+              <div className="app-footer-links">
+                <a href="/privacy" className="app-footer-link">Privacidade</a>
+                <a href="/terms" className="app-footer-link">Termos</a>
+                <a href="/contact" className="app-footer-link">Contato</a>
+              </div>
+              <div className="app-footer-copyright">
+                &copy; {new Date().getFullYear()} Avaliador de Prompts. Todos os direitos reservados.
+              </div>
+            </div>
+          </div>
+        </footer>
 
         {showLoginModal && (
           <LoginModal 

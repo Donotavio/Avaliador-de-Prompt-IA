@@ -21,6 +21,7 @@ from schemas.prompt_schema import (
 )
 from services.usage_manager import usage_manager
 from utils.logger import logger
+from config.settings import USAGE_LIMITS
 
 # Importação para sistema de usuários e pagamentos
 from services.database import Base, engine, get_db
@@ -184,7 +185,21 @@ async def check_premium_status(
         logger.info(f"Verificando status premium do usuário: {user_id}")
         can_use, message, has_expired = usage_manager.can_use_premium(user_id)
         logger.info(f"Status premium: {can_use}, Mensagem: {message}")
-        return {"can_use": can_use, "message": message, "has_expired": has_expired}
+        
+        # Se o usuário pode usar premium, não retornar mensagem de status
+        if can_use and message == "Uso ilimitado (Plano Premium)":
+            return {
+                "status": can_use,
+                "has_expired": has_expired,
+                "evaluation_count": usage_manager.get_user_usage(user_id).premium_evaluations_count
+            }
+        
+        return {
+            "status": can_use, 
+            "message": message, 
+            "has_expired": has_expired,
+            "evaluation_count": usage_manager.get_user_usage(user_id).premium_evaluations_count
+        }
     except Exception as e:
         logger.error(f"Erro ao verificar status premium: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -243,7 +258,23 @@ async def check_free_status(
         logger.info(f"Verificando status gratuito do usuário: {user_id}")
         can_use_free, message = usage_manager.can_use_free(user_id)
         logger.info(f"Status gratuito: {can_use_free}, Mensagem: {message}")
-        return {"can_use_free": can_use_free, "message": message}
+        
+        user_usage = usage_manager.get_user_usage(user_id)
+        
+        # Se o usuário pode usar normalmente, não incluir mensagem
+        if can_use_free and not message:
+            return {
+                "status": can_use_free,
+                "evaluation_count": user_usage.free_evaluations_count,
+                "daily_limit": USAGE_LIMITS["free"]["daily_limit"]
+            }
+        
+        return {
+            "status": can_use_free, 
+            "message": message,
+            "evaluation_count": user_usage.free_evaluations_count,
+            "daily_limit": USAGE_LIMITS["free"]["daily_limit"]
+        }
     except Exception as e:
         logger.error(f"Erro ao verificar status gratuito: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

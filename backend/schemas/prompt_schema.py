@@ -5,7 +5,7 @@ Este módulo define os modelos de dados para entrada e saída da API
 relacionados à avaliação e otimização de prompts.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from enum import Enum
 from pydantic import BaseModel, Field
 
@@ -15,6 +15,25 @@ class PlanType(str, Enum):
 
     FREE = "free"
     PREMIUM = "premium"
+
+
+class DetailedAnalysis(BaseModel):
+    """
+    Schema para análise detalhada do prompt.
+    
+    Attributes:
+        central_objective: Objetivo central identificado no prompt
+        strengths_weaknesses: Pontos fortes e fracos da redação original
+        context: Avaliação se o prompt oferece contexto suficiente e estruturado
+        practical_suggestions: Explicação detalhada sobre as sugestões práticas
+        ethical_practices: Avaliação da aderência às melhores práticas éticas
+    """
+    
+    central_objective: str = Field(..., description="Objetivo central identificado no prompt")
+    strengths_weaknesses: str = Field(..., description="Pontos fortes e fracos da redação original")
+    context: str = Field(..., description="Avaliação se o prompt oferece contexto suficiente e estruturado")
+    practical_suggestions: str = Field(..., description="Explicação detalhada sobre as sugestões práticas fornecidas")
+    ethical_practices: str = Field(..., description="Avaliação da aderência às melhores práticas éticas em interação com IA")
 
 
 class PromptBase(BaseModel):
@@ -66,8 +85,8 @@ class PromptEvaluation(BaseModel):
         ..., description="Lista de sugestões para melhorar o prompt"
     )
     optimized_prompt: str = Field(..., description="Versão otimizada do prompt")
-    detailed_analysis: Optional[dict] = Field(
-        None, description="Análise detalhada do prompt, incluindo objetivo central, pontos fortes e fracos, etc."
+    detailed_analysis: Optional[DetailedAnalysis] = Field(
+        None, description="Análise detalhada do prompt, incluindo objetivo central, pontos fortes e fracos, contexto, sugestões práticas e práticas éticas"
     )
 
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import PaymentForm from './PaymentForm';
-import './PremiumModal.css';
+import { CheckIcon, CloseIcon, InfoIcon } from './Icons';
 
 interface PremiumModalProps {
   onClose: () => void;
@@ -37,27 +37,23 @@ const PremiumModal: React.FC<PremiumModalProps> = ({ onClose, refreshPage = fals
     return !!localStorage.getItem('token');
   };
 
-  // Avança para o passo de pagamento ou registro dependendo se o usuário está logado
+  // Função chamada quando o usuário clica em "Começar Agora"
   const handlePurchase = () => {
-    if (isLoggedIn()) {
-      // Se o usuário já estiver logado, vai direto para pagamento
+    // Verifica se o usuário já está logado
+    const isUserLoggedIn = localStorage.getItem('token') !== null;
+    
+    if (isUserLoggedIn) {
+      // Se já está logado, vai direto para o pagamento
       setCurrentStep(ModalStep.PAYMENT);
     } else {
-      // Se não estiver logado, mostra formulário de cadastro
+      // Se não está logado, vai para o formulário de registro
       setCurrentStep(ModalStep.REGISTER);
     }
   };
 
+  // Função chamada quando o usuário clica em "Continuar no Plano Gratuito"
   const handleContinueFree = () => {
-    // Primeiro fecha o modal
-    onClose();
-    
-    // Depois recarrega a página com um pequeno atraso
-    if (refreshPage) {
-      setTimeout(() => {
-        window.location.reload();
-      }, 100); // Pequeno atraso para garantir que o React atualize o estado
-    }
+    closeModal();
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -144,128 +140,204 @@ const PremiumModal: React.FC<PremiumModalProps> = ({ onClose, refreshPage = fals
     }
   };
 
-  // Função chamada quando o pagamento é processado com sucesso
+  // Função para lidar com o sucesso do pagamento
   const handlePaymentSuccess = (checkoutUrl: string) => {
-    // Redireciona para a URL de pagamento
     window.location.href = checkoutUrl;
   };
 
+  // Função para lidar com erros no pagamento
+  const handlePaymentError = (error: string) => {
+    setPaymentError(error);
+  };
+
+  const closeModal = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    onClose();
+  };
+
   // Renderiza o passo atual do modal
-  const renderStep = () => {
+  const renderStepContent = () => {
     switch (currentStep) {
       case ModalStep.INTRO:
         return (
-          <>
-            <h2>Plano Premium</h2>
-            <p>Aproveite todas as vantagens do plano premium:</p>
-            <ul>
-              <li>Avaliações ilimitadas</li>
-              <li>Análise detalhada dos prompts</li>
-              <li>Sugestões avançadas de otimização</li>
-              <li>Suporte prioritário</li>
+          <div className="premium-content">
+            <h3>Aproveite todas as vantagens do plano premium:</h3>
+            <ul className="premium-features">
+              <li><CheckIcon /> Avaliações ilimitadas</li>
+              <li><CheckIcon /> Análise detalhada dos prompts</li>
+              <li><CheckIcon /> Sugestões avançadas de otimização</li>
+              <li><CheckIcon /> Suporte prioritário</li>
             </ul>
-            <div className="price-section">
-              <span className="price">R$49</span>
-              <span className="period">/mês</span>
+            <div className="premium-price">
+              <span className="price-value">R$49</span>
+              <span className="price-period">/mês</span>
             </div>
-            
-            {paymentError && <div className="error-message">{paymentError}</div>}
-            
-            <div className="modal-buttons">
-              <button className="premium-button" onClick={handlePurchase}>
-                {isLoggedIn() ? 'Assinar Agora' : 'Criar Conta'}
+            <div className="premium-actions">
+              <button 
+                className="btn btn-primary btn-lg w-full"
+                onClick={() => handlePurchase()}
+                disabled={isLoading}
+              >
+                {isLoading ? 'Processando...' : 'Começar Agora'}
               </button>
-              <button className="cancel-button" onClick={handleContinueFree}>
+              <button 
+                className="btn btn-outline btn-sm mt-4 w-full"
+                onClick={() => handleContinueFree()}
+              >
                 Continuar no Plano Gratuito
               </button>
             </div>
-          </>
+          </div>
         );
         
       case ModalStep.REGISTER:
         return (
-          <>
-            <h2>Criar Conta</h2>
-            <p>Preencha os dados abaixo para criar sua conta</p>
+          <div className="auth-modal-container">
+            <button className="auth-close-button" onClick={closeModal}>
+              <CloseIcon size={20} />
+            </button>
             
-            {error && <div className="error-message">{error}</div>}
+            <div className="auth-modal-header">
+              <h2 className="auth-modal-title">Criar Conta</h2>
+              <p>Preencha os dados abaixo para criar sua conta</p>
+            </div>
             
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label htmlFor="email">Email*</label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
+            <div className="auth-modal-content">
+              {error && <div className="auth-error-message">{error}</div>}
               
-              <div className="form-group">
-                <label htmlFor="full_name">Nome Completo*</label>
-                <input
-                  type="text"
-                  id="full_name"
-                  name="full_name"
-                  value={formData.full_name}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="password">Senha*</label>
-                <input
-                  type="password"
-                  id="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                />
-                <small>Mínimo de 8 caracteres</small>
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="password_confirm">Confirmar Senha*</label>
-                <input
-                  type="password"
-                  id="password_confirm"
-                  name="password_confirm"
-                  value={formData.password_confirm}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              
-              <div className="modal-buttons">
-                <button type="submit" className="premium-button" disabled={isLoading}>
-                  {isLoading ? 'Processando...' : 'Continuar'}
+              <form onSubmit={handleSubmit}>
+                <div className="auth-form-group">
+                  <label htmlFor="email">Email*</label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                
+                <div className="auth-form-group">
+                  <label htmlFor="full_name">Nome Completo*</label>
+                  <input
+                    type="text"
+                    id="full_name"
+                    name="full_name"
+                    value={formData.full_name}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                
+                <div className="auth-form-group">
+                  <label htmlFor="password">Senha*</label>
+                  <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                  />
+                  <div className="auth-form-password-hint">
+                    <InfoIcon size={14} />
+                    <span>Mínimo de 8 caracteres</span>
+                  </div>
+                </div>
+                
+                <div className="auth-form-group">
+                  <label htmlFor="password_confirm">Confirmar Senha*</label>
+                  <input
+                    type="password"
+                    id="password_confirm"
+                    name="password_confirm"
+                    value={formData.password_confirm}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                
+                <button type="submit" className="auth-submit-button" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <div className="spinner"></div>
+                      <span>Processando...</span>
+                    </>
+                  ) : 'Continuar'}
                 </button>
-                <button type="button" className="back-button" onClick={() => setCurrentStep(ModalStep.INTRO)}>
-                  Voltar
+              </form>
+              
+              <div className="auth-alternate-action" style={{marginTop: '1rem', textAlign: 'center'}}>
+                Já tem uma conta?
+                <button type="button" onClick={() => setCurrentStep(ModalStep.PAYMENT)}>
+                  Entrar
                 </button>
               </div>
-            </form>
-          </>
+            </div>
+          </div>
         );
         
       case ModalStep.PAYMENT:
         return (
           <PaymentForm 
-            onClose={() => setCurrentStep(ModalStep.INTRO)} 
+            onClose={onClose} 
             onSuccess={handlePaymentSuccess} 
+            onError={handlePaymentError} 
           />
         );
+      
+      default:
+        return null;
     }
   };
 
   return (
-    <div className="modal-overlay" onClick={currentStep === ModalStep.INTRO ? onClose : undefined}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
-        {renderStep()}
+    <div 
+      className="modal-backdrop" 
+      onClick={closeModal}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(0, 0, 0, 0.5)'
+      }}
+    >
+      <div 
+        className="modal premium-modal" 
+        onClick={e => e.stopPropagation()}
+        style={{ 
+          position: 'relative',
+          zIndex: 1001,
+          background: 'white',
+          borderRadius: '8px',
+          maxWidth: '500px',
+          width: '100%',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+        }}
+      >
+        <div className="modal-header">
+          <h2 className="modal-title">
+            {currentStep === ModalStep.INTRO && 'Plano Premium'}
+            {currentStep === ModalStep.REGISTER && 'Criar Conta'}
+            {currentStep === ModalStep.PAYMENT && 'Pagamento'}
+          </h2>
+          <button className="modal-close" onClick={closeModal}>
+            <CloseIcon />
+          </button>
+        </div>
+        <div className="modal-body">
+          {renderStepContent()}
+        </div>
       </div>
     </div>
   );
