@@ -4,6 +4,13 @@ from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 import os
 from sqlalchemy import text
+import sys
+import logging
+
+# Adiciona o diretório pai ao sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.sql_security import safe_execute
 
 # Carrega variáveis de ambiente
 load_dotenv()
@@ -54,8 +61,10 @@ def test_db_connection():
     try:
         # Cria uma conexão de teste
         connection = engine.connect()
-        # Executa uma consulta simples
-        connection.execute(text("SELECT 1"))
+        
+        # Executa uma consulta simples usando a função segura
+        safe_execute(connection, "SELECT 1")
+        
         connection.close()
         print("Conexão com o banco de dados estabelecida com sucesso!")
         return True

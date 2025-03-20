@@ -18,29 +18,37 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Verifica se a tabela já existe
+    # Primeiro verificamos se a tabela já existe
     conn = op.get_bind()
-    result = conn.execute(text("SHOW TABLES LIKE 'subscriptions'"))
-    if not result.fetchone():
-        # Cria a tabela de assinaturas apenas se ela não existir
-        op.create_table(
-            'subscriptions',
-            sa.Column('id', sa.String(36), primary_key=True, index=True),
-            sa.Column('user_id', sa.String(36), sa.ForeignKey("users.id"), nullable=False),
-            sa.Column('status', sa.String(50), default="pending"),
-            sa.Column('plan_type', sa.String(50), nullable=False, default="premium"),
-            sa.Column('amount', sa.Float, nullable=False),
-            sa.Column('currency', sa.String(3), default="BRL"),
-            sa.Column('abacate_payment_id', sa.String(255), nullable=True),
-            sa.Column('abacate_customer_id', sa.String(255), nullable=True),
-            sa.Column('start_date', sa.DateTime(timezone=True), nullable=True),
-            sa.Column('end_date', sa.DateTime(timezone=True), nullable=True),
-            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now())
+    
+    # Usar uma query parametrizada
+    result = conn.execute(
+        text("SHOW TABLES LIKE :table_name"),
+        {"table_name": 'subscriptions'}
+    )
+    
+    # Se a tabela não existir, criamos
+    if result.rowcount == 0:
+        op.create_table('subscriptions',
+        sa.Column('id', sa.String(length=36), primary_key=True),
+        sa.Column('user_id', sa.String(length=36), nullable=False),
+        sa.Column('status', sa.String(length=50), nullable=True),
+        sa.Column('plan_type', sa.String(length=50), nullable=False),
+        sa.Column('amount', sa.Float(), nullable=False),
+        sa.Column('currency', sa.String(length=3), nullable=True, server_default='BRL'),
+        sa.Column('abacate_payment_id', sa.String(length=255), nullable=True),
+        sa.Column('abacate_customer_id', sa.String(length=255), nullable=True),
+        sa.Column('start_date', sa.DateTime(), nullable=True),
+        sa.Column('end_date', sa.DateTime(), nullable=True),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.func.current_timestamp(), nullable=True),
+        sa.Column('updated_at', sa.DateTime(), server_default=sa.func.current_timestamp(), nullable=True),
+        sa.ForeignKeyConstraint(['user_id'], ['users.id']),
         )
         
+        # Cria um índice para user_id
+        op.create_index(op.f('ix_subscriptions_user_id'), 'subscriptions', ['user_id'], unique=False)
+        
         # Cria índices para melhorar performance de queries
-        op.create_index('idx_subscription_user_id', 'subscriptions', ['user_id'])
         op.create_index('idx_subscription_status', 'subscriptions', ['status'])
         op.create_index('idx_subscription_abacate_payment_id', 'subscriptions', ['abacate_payment_id'])
     
@@ -48,8 +56,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Remove a tabela de assinaturas
+    # Verifica se a tabela existe antes de tentar removê-la
     conn = op.get_bind()
-    result = conn.execute(text("SHOW TABLES LIKE 'subscriptions'"))
-    if result.fetchone():
+    
+    # Usar uma query parametrizada
+    result = conn.execute(
+        text("SHOW TABLES LIKE :table_name"),
+        {"table_name": 'subscriptions'}
+    )
+    
+    # Se a tabela existir, removemos
+    if result.rowcount > 0:
+        op.drop_index(op.f('ix_subscriptions_user_id'), table_name='subscriptions')
         op.drop_table('subscriptions') 

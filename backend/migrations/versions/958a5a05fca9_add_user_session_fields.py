@@ -32,14 +32,17 @@ def upgrade() -> None:
         # Fallback para texto
         op.add_column('users', sa.Column('active_tokens', sa.Text(), nullable=True))
     
-    # Atualiza valores padrão
+    # Atualiza valores padrão usando parâmetros nomeados
     connection = op.get_bind()
-    connection.execute(sa.text("""
-        UPDATE users 
-        SET failed_login_attempts = 0,
-            active_tokens = '[]'
-        WHERE active_tokens IS NULL
-    """))
+    connection.execute(
+        sa.text("""
+            UPDATE users 
+            SET failed_login_attempts = :attempts,
+                active_tokens = :tokens
+            WHERE active_tokens IS NULL
+        """),
+        {"attempts": 0, "tokens": '[]'}
+    )
     # ### end Alembic commands ###
 
 

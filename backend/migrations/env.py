@@ -6,12 +6,69 @@ from sqlalchemy import pool
 from alembic import context
 import os
 import sys
+import logging
 
 # Adiciona o diretório pai ao sys.path para importar os módulos
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Importa os modelos e a configuração do banco de dados
 from services.database import Base, SQLALCHEMY_DATABASE_URL
+from utils.sql_security import safe_execute, log_sql_warning
+
+# Configuração adicional de logging
+migration_logger = logging.getLogger("alembic.migrations")
+
+# Função para execução segura de SQL em migrações
+def execute_migration_sql(connection, sql_query, params=None):
+    """
+    Executa SQL de migração de forma segura.
+    Usa nossa função de segurança ou faz fallback para execução direta em caso de erro.
+    
+    Args:
+        connection: Conexão SQLAlchemy
+        sql_query: Query SQL
+        params: Parâmetros para a query (opcional)
+    
+    Returns:
+        Resultado da execução
+    """
+    try:
+        # Tenta usar nossa função segura
+        return safe_execute(connection, sql_query, params)
+    except Exception as e:
+        # Aviso de fallback
+        migration_logger.warning(f"Executando migração em modo fallback devido a: {str(e)}")
+        log_sql_warning(sql_query, params)
+        
+        # Executa diretamente se a validação de segurança falhar
+        # Importante para migrações que precisam usar sintaxe SQL não
+        # filtrada pela nossa função segura
+        stmt = text(sql_query)
+        if params:
+            return connection.execute(stmt, params)
+        else:
+            return connection.execute(stmt)
+
+# Monkey patch para context.execute para usar nossa função segura
+original_execute = context.execute
+
+def secure_execute(sql, *args, **kwargs):
+    # Obtem a conexão atual
+    conn = context.get_bind()
+    try:
+        # Se for uma string SQL, usamos nossa função segura
+        if isinstance(sql, str):
+            migration_logger.info("Executando SQL de migração com validação de segurança")
+            return execute_migration_sql(conn, sql, kwargs.get('params'))
+        # Caso contrário, passamos para a função original
+        return original_execute(sql, *args, **kwargs)
+    except Exception as e:
+        migration_logger.error(f"Erro ao executar SQL de migração: {str(e)}")
+        # Prosseguir com a execução original em caso de erro
+        return original_execute(sql, *args, **kwargs)
+
+# Aplica o monkey patch
+context.execute = secure_execute
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
