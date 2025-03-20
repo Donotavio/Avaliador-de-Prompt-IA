@@ -72,8 +72,14 @@ def send_email(to_email: str, subject: str, html_content: str) -> bool:
         message.attach(MIMEText(html_content, "html"))
         
         # Conecta ao servidor SMTP
-        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
-        server.starttls()
+        if EMAIL_PORT == 465:
+            # Usar conexão SSL direta para porta 465
+            server = smtplib.SMTP_SSL(EMAIL_HOST, EMAIL_PORT)
+        else:
+            # Usar TLS para outras portas (como 587)
+            server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
+            server.starttls()
+            
         server.login(EMAIL_USER, EMAIL_PASSWORD)
         
         # Envia o e-mail
