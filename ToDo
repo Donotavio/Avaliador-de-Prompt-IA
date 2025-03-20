@@ -1,1 +1,72 @@
-1 - botão embaido avaliar com a compra
+1.2 Configuração CORS Insegura
+Severidade: Alta
+A configuração CORS atual permite acesso de qualquer origem (allow_origins=["*"]).
+
+1.3 Gestão de Sessões e JWT
+Severidade: Alta
+A configuração atual do JWT tem um tempo de expiração muito longo (7 dias) e utiliza uma chave secreta hardcoded.
+
+2.1 Injeção SQL Potencial
+Severidade: Alta
+A aplicação usa o SQLAlchemy ORM, o que ajuda a prevenir injeções SQL, mas existem áreas de risco.
+
+2.2 Vulnerabilidade XSS em Emails
+Severidade: Média
+O conteúdo HTML em emails não é sanitizado adequadamente.
+
+2.3 Fallback de Hash de Senha Inseguro
+Severidade: Alta
+A aplicação usa uma função de fallback insegura para hash de senha caso o bcrypt falhe.
+
+2.4 Validação de Entrada Inadequada
+Severidade: Média
+Diversas APIs não validam entradas adequadamente.
+
+3.1 Cabeçalhos de Segurança Ausentes
+Severidade: Média
+A aplicação não implementa cabeçalhos de segurança HTTP essenciais.
+
+3.2 TLS/SSL Configuração
+Severidade: Alta
+Não há configuração adequada forçando TLS/SSL.
+Correção Recomendada:
+Configure HTTPS na Hostinger com certificado SSL válido
+Implemente HSTS para forçar conexões seguras
+Configure versões TLS seguras (TLS 1.2+)
+
+3.3 Proteção contra DDoS
+Severidade: Média
+Não existe proteção adequada contra ataques de negação de serviço.
+
+4.1 Armazenamento Seguro de Senhas
+Severidade: Média
+A aplicação usa bcrypt, que é bom, mas com configuração padrão.
+
+5.1 Proteção CSRF
+Severidade: Alta
+Não há proteção adequada contra ataques CSRF.
+
+5.2 Proteção contra Ataques de Força Bruta
+Severidade: Alta
+Não há proteção adequada contra ataques de força bruta nas APIs de login e outros endpoints críticos.
+
+
+6. Recomendações Específicas para Hostinger
+6.1 Configuração de Firewall
+Severidade: Alta
+Configurar o firewall do servidor na Hostinger para:
+Limitar acesso SSH a IPs específicos
+Bloquear portas não utilizadas
+Implementar regras de filtragem para mitigar ataques DDoS
+6.2 Configuração HTTPS
+Severidade: Alta
+Adquirir e configurar certificado SSL/TLS
+Redirecionar todo tráfego HTTP para HTTPS
+Implementar HSTS
+Desativar versões antigas de TLS (1.0/1.1)
+6.3 Configuração do Banco de Dados
+Severidade: Alta
+Modificar as credenciais do banco de dados (já expostas no código)
+Restringir acesso ao banco de dados apenas ao servidor da aplicação
+Implementar backup regular e criptografado dos dados
+Definir permissões mínimas necessárias para o usuário do banco de dados

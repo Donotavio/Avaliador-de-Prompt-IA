@@ -34,7 +34,13 @@ from fastapi.security import OAuth2PasswordBearer
 
 # Constantes para configuração da API
 API_PREFIX = "/api"
-ALLOWED_HOSTS = ["*"]
+# Definindo origens permitidas de forma segura
+ALLOWED_HOSTS = [
+    "https://avaliadorprompt.com.br",  # Domínio principal em produção
+    "https://www.avaliadorprompt.com.br",  # Subdomínio www em produção
+    "http://localhost:3000",  # Ambiente de desenvolvimento local frontend
+    "http://localhost:5000"   # Ambiente de teste local
+]
 
 # Cria tabelas no banco de dados (se não existirem)
 Base.metadata.create_all(bind=engine)
@@ -48,13 +54,50 @@ app = FastAPI(
     redoc_url=f"{API_PREFIX}/redoc",
 )
 
+# Adiciona middleware de segurança para cabeçalhos adicionais
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """
+    Middleware para adicionar cabeçalhos de segurança a todas as respostas.
+    Ajuda a mitigar vulnerabilidades XSS, clickjacking e outros tipos de ataques.
+    """
+    response = await call_next(request)
+    
+    # Previne clickjacking (a página só pode ser exibida no mesmo domínio)
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    
+    # Previne XSS forçando o navegador a cumprir o tipo de conteúdo declarado
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    
+    # Ativa a proteção XSS em navegadores antigos
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    
+    # Força conexões HTTPS
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    
+    # Define política de recursos - política CSP básica que pode ser expandida conforme necessário
+    csp_directives = [
+        "default-src 'self'",
+        "img-src 'self' data: https://cdn.avaliadorprompt.com.br",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "script-src 'self' 'unsafe-inline' https://cdn.avaliadorprompt.com.br",
+        "connect-src 'self'" + ''.join(f" {host}" for host in ALLOWED_HOSTS)
+    ]
+    response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
+    
+    # Define política de referrer
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    
+    return response
+
 # Configuração do CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_HOSTS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],  # Métodos específicos permitidos
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],  # Cabeçalhos específicos permitidos
 )
 
 # Inclui rotas com prefixo API

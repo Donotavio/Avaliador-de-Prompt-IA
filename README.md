@@ -88,3 +88,40 @@ avaliador_prompt_ia/
 ## Licença
 
 MIT 
+
+## Segurança da Aplicação
+
+### Configuração CORS Segura
+
+A aplicação implementa medidas de segurança CORS (Cross-Origin Resource Sharing) para proteger contra ataques de origem cruzada:
+
+- **Origens Permitidas**: Apenas domínios específicos podem acessar a API
+- **Métodos Permitidos**: Apenas GET, POST, PUT e DELETE são permitidos
+- **Cabeçalhos Permitidos**: Apenas cabeçalhos essenciais são permitidos
+
+### Executando com Verificações de Segurança
+
+Para iniciar o servidor com verificações automáticas de segurança:
+
+```bash
+cd backend
+./run_server.py
+```
+
+Este script garante que:
+1. O servidor inicie corretamente
+2. As configurações CORS estejam aplicadas conforme esperado
+3. Os cabeçalhos de segurança HTTP estejam configurados
+
+### Verificação Manual de Segurança
+
+Para executar verificações de segurança manualmente:
+
+```bash
+cd backend
+python -m tools.security_checker
+```
+
+### Implantação Segura na Hostinger
+
+Para implantação em produção na Hostinger, siga as instruções detalhadas no arquivo `backend/SECURITY.md`. 

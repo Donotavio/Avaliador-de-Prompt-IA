@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import PromptForm from './components/PromptForm';
 import PremiumModal from './components/PremiumModal';
 import PaymentSuccessPage from './components/PaymentSuccessPage';
-import { InfoIcon, UserIcon, LogoutIcon, LoginIcon } from './components/Icons';
+import { UserIcon, LogoutIcon, LoginIcon } from './components/Icons';
+import PasswordField from './components/PasswordField';
 
 // Ícone de prompt para o logo
 const PromptIcon = () => (
@@ -336,36 +337,25 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
                   </div>
                 )}
 
-                <div className="auth-form-group">
-                  <label htmlFor="password">Senha*</label>
-                  <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                  />
-                  {!isLogin && (
-                    <div className="auth-form-password-hint">
-                      <InfoIcon />
-                      <span>Mínimo de 8 caracteres</span>
-                    </div>
-                  )}
-                </div>
+                <PasswordField
+                  id="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  label="Senha"
+                  showHint={!isLogin}
+                />
 
                 {!isLogin && (
-                  <div className="auth-form-group">
-                    <label htmlFor="password_confirm">Confirmar Senha*</label>
-                    <input
-                      type="password"
-                      id="password_confirm"
-                      name="password_confirm"
-                      value={formData.password_confirm}
-                      onChange={handleChange}
-                      required
-                    />
-                  </div>
+                  <PasswordField
+                    id="password_confirm"
+                    name="password_confirm"
+                    value={formData.password_confirm}
+                    onChange={handleChange}
+                    required
+                    label="Confirmar Senha"
+                  />
                 )}
 
                 {isLogin && (
@@ -502,31 +492,26 @@ const ResetPasswordPage: React.FC = () => {
       
       <form onSubmit={handleSubmit}>
         <div className="form-group">
-          <label htmlFor="new_password">Nova Senha*</label>
-          <input
-            type="password"
+          <PasswordField
             id="new_password"
             name="new_password"
             value={formData.new_password}
             onChange={handleChange}
             required
             minLength={8}
+            label="Nova Senha"
+            showHint={true}
           />
-          <div className="password-hint">
-            <InfoIcon />
-            <span>Mínimo de 8 caracteres</span>
-          </div>
         </div>
         
         <div className="form-group">
-          <label htmlFor="confirm_password">Confirmar Senha*</label>
-          <input
-            type="password"
+          <PasswordField
             id="confirm_password"
             name="confirm_password"
             value={formData.confirm_password}
             onChange={handleChange}
             required
+            label="Confirmar Senha"
           />
         </div>
         
@@ -551,52 +536,10 @@ const App: React.FC = () => {
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState<boolean>(false);
   const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [userChanged, setUserChanged] = useState<boolean>(false);
 
-  // Verifica se há um usuário logado no localStorage
-  useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        const userObj = JSON.parse(storedUser);
-        setUserId(userObj.id);
-        setUserName(userObj.fullName || userObj.email);
-        setIsLoggedIn(true);
-        setIsAdmin(userObj.id === 'admin');
-        
-        // Se o objeto do usuário já tiver a flag isPremium
-        if (userObj.hasOwnProperty('isPremium')) {
-          setIsPremium(userObj.isPremium);
-        }
-        
-        // Verifica o status premium do usuário
-        checkPremiumStatus();
-      } catch (e) {
-        console.error('Erro ao parsear dados do usuário:', e);
-        // Em caso de erro, limpa o localStorage para evitar problemas
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
-      }
-    }
-  }, []);
-  
-  // Verificar o status premium quando o aplicativo é montado e a cada 30 segundos
-  useEffect(() => {
-    // Verificação inicial
-    checkPremiumStatus();
-    
-    // Configurar verificação periódica
-    const intervalId = setInterval(() => {
-      if (isLoggedIn) {
-        checkPremiumStatus();
-      }
-    }, 30000); // 30 segundos
-    
-    // Limpar o intervalo quando o componente for desmontado
-    return () => clearInterval(intervalId);
-  }, [isLoggedIn]);
-  
-  // Função para verificar o status premium do usuário
-  const checkPremiumStatus = async () => {
+  // Função para verificar o status premium do usuário (mover para antes dos useEffect)
+  const checkPremiumStatus = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
@@ -633,7 +576,50 @@ const App: React.FC = () => {
     } catch (error) {
       console.error('Erro ao verificar status premium:', error);
     }
-  };
+  }, [isPremium]); // Adicionar isPremium como dependência
+
+  // Verifica se há um usuário logado no localStorage
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const userObj = JSON.parse(storedUser);
+        setUserId(userObj.id);
+        setUserName(userObj.fullName || userObj.email);
+        setIsLoggedIn(true);
+        setIsAdmin(userObj.id === 'admin');
+        
+        // Se o objeto do usuário já tiver a flag isPremium
+        if (userObj.hasOwnProperty('isPremium')) {
+          setIsPremium(userObj.isPremium);
+        }
+        
+        // Verifica o status premium do usuário
+        checkPremiumStatus();
+      } catch (e) {
+        console.error('Erro ao parsear dados do usuário:', e);
+        // Em caso de erro, limpa o localStorage para evitar problemas
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+      }
+    }
+  }, [checkPremiumStatus]);
+  
+  // Verificar o status premium quando o aplicativo é montado e a cada 30 segundos
+  useEffect(() => {
+    // Verificação inicial
+    checkPremiumStatus();
+    
+    // Configurar verificação periódica
+    const intervalId = setInterval(() => {
+      if (isLoggedIn) {
+        checkPremiumStatus();
+      }
+    }, 30000); // 30 segundos
+    
+    // Limpar o intervalo quando o componente for desmontado
+    return () => clearInterval(intervalId);
+  }, [isLoggedIn, checkPremiumStatus]);
   
   // Função para efetuar logout (limpeza de dados)
   const handleLogout = () => {
@@ -650,9 +636,36 @@ const App: React.FC = () => {
 
   // Função chamada após login bem-sucedido
   const handleLoginSuccess = () => {
-    // Recarregar a página para atualizar o estado
-    window.location.reload();
+    // Atualizar o estado do usuário sem recarregar a página
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const userObj = JSON.parse(storedUser);
+        setUserId(userObj.id);
+        setUserName(userObj.fullName || userObj.email);
+        setIsLoggedIn(true);
+        setIsAdmin(userObj.id === 'admin');
+        setUserChanged(true);
+      } catch (e) {
+        console.error('Erro ao parsear dados do usuário:', e);
+      }
+    }
   };
+
+  // Verificar status premium quando componente montar
+  useEffect(() => {
+    if (isLoggedIn) {
+      checkPremiumStatus();
+    }
+  }, [isLoggedIn, checkPremiumStatus]);
+
+  // Verificar status premium novamente quando usuário logar
+  useEffect(() => {
+    if (userChanged) {
+      checkPremiumStatus();
+      setUserChanged(false);
+    }
+  }, [userChanged, checkPremiumStatus]);
 
   return (
     <Router>

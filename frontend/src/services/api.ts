@@ -1,4 +1,7 @@
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+// Definir URL da API com base no ambiente
+const API_BASE_URL = process.env.NODE_ENV === 'production'
+  ? 'https://avaliadorprompt.com.br/api/v1'  // URL de produção
+  : 'http://localhost:8000/api/v1';          // URL de desenvolvimento
 
 export type PlanType = 'free' | 'premium';
 

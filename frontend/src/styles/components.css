@@ -1312,4 +1312,109 @@ select.form-control {
   100% {
     transform: translateX(100%);
   }
+}
+
+/* Estilos para o componente PasswordField */
+.password-field-container {
+  position: relative;
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+.password-field-container label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--neutral-700);
+}
+
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-input {
+  width: 100%;
+  padding: 10px 40px 10px 12px;
+  border: 1px solid var(--neutral-300);
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background-color: white;
+  color: var(--neutral-800);
+}
+
+.password-input:focus {
+  border-color: var(--primary-600);
+  box-shadow: 0 0 0 2px rgba(var(--primary-600), 0.2);
+}
+
+.password-toggle-button {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--neutral-500);
+  transition: color 0.2s ease;
+  padding: 4px;
+  z-index: 2;
+}
+
+.password-toggle-button:hover {
+  color: var(--neutral-700);
+}
+
+.password-toggle-button:focus {
+  outline: none;
+  color: var(--primary-600);
+}
+
+.password-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--neutral-500);
+}
+
+.password-hint svg {
+  flex-shrink: 0;
+}
+
+/* Integração do PasswordField com o modal de autenticação */
+.auth-modal-content .password-field-container {
+  margin-bottom: var(--space-4);
+}
+
+.auth-modal-content .password-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--neutral-800);
+  background-color: white;
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  padding-right: 40px;
+}
+
+.auth-modal-content .password-input:focus {
+  border-color: var(--primary-400);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+.auth-modal-content .password-toggle-button {
+  height: 100%;
+  padding: 0 10px;
 } 
