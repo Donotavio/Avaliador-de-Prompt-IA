@@ -31,6 +31,12 @@ from services.auth import get_current_user, get_current_admin_user
 from sqlalchemy.orm import Session
 from typing import Optional
 from fastapi.security import OAuth2PasswordBearer
+import uvicorn
+import os
+import logging
+from datetime import datetime
+
+from services.token_security import initialize_jwt_keys
 
 # Constantes para configuração da API
 API_PREFIX = "/api"
@@ -43,6 +49,8 @@ ALLOWED_HOSTS = [
 ]
 
 # Cria tabelas no banco de dados (se não existirem)
+# Nota: Para migrações complexas, use o Alembic: 
+# `alembic upgrade head`
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -415,9 +423,9 @@ async def admin_reset_premium_usage(user_id: str):
         logger.error(f"[ADMIN] Erro ao resetar uso premium: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro ao resetar uso premium: {str(e)}")
 
+# Initialize JWT keys at startup
+initialize_jwt_keys()
 
 if __name__ == "__main__":
-    import uvicorn
-
     logger.info("Iniciando servidor da API")
     uvicorn.run(app, host="0.0.0.0", port=8000)

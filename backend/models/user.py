@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, String, DateTime, Integer
+from sqlalchemy import Boolean, Column, String, DateTime, Integer, JSON
 from sqlalchemy.sql import func
 from passlib.context import CryptContext
 import uuid
@@ -25,6 +25,13 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    
+    # Rastreamento de sessão para segurança
+    last_login = Column(DateTime(timezone=True), nullable=True)
+    last_activity = Column(DateTime(timezone=True), nullable=True)
+    failed_login_attempts = Column(Integer, default=0)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
+    active_tokens = Column(JSON, default=list)
     
     # ID do cliente no serviço de pagamento AbacatePay
     abacate_customer_id = Column(String(255), nullable=True)

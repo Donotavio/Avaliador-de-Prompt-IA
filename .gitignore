@@ -67,4 +67,5 @@ tmp/
 .env.development.local
 .env.test.local
 .env.production.local
+jwt_keys.json
 

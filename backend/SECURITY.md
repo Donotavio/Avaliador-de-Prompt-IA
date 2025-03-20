@@ -118,3 +118,40 @@ Options -Indexes
 Para reportar problemas de segurança, entre em contato com a equipe através do email seguro:
 
 - contato@avaliadorprompt.com.br 
+
+## Gestão de Sessões e JWT
+
+### Tokens JWT Seguros
+
+O sistema implementa um mecanismo robusto de autenticação e gestão de sessões baseado em tokens JWT:
+
+- **Expiração em Curto Prazo**: Os tokens de acesso expiram após 60 minutos, reduzindo a janela de oportunidade para ataques.
+- **Sistema de Refresh Token**: Tokens de refresh com validade de 7 dias permitem a renovação da sessão sem necessidade de nova autenticação.
+- **Rotação de Chaves**: As chaves de assinatura JWT são rotacionadas automaticamente a cada 30 dias.
+- **Key ID (kid)**: Cada token inclui um identificador de chave, permitindo a validação com a chave correta mesmo após rotação.
+- **Armazenamento Seguro**: As chaves são armazenadas em formato JSON em uma localização segura, acessível apenas pelo processo da aplicação.
+
+### Controle de Sessões
+
+O sistema oferece controle detalhado de sessões ativas:
+
+- **Múltiplas Sessões**: Suporte para até 5 sessões simultâneas por usuário.
+- **Rastreamento de Uso**: Cada sessão registra dados como IP, user agent, data de criação e expiração.
+- **Revogação de Tokens**: Endpoints para logout de uma única sessão ou todas as sessões ativas.
+- **Visualização de Sessões**: Os usuários podem ver e gerenciar suas sessões ativas.
+
+### Proteção Contra Ataques de Força Bruta
+
+Mecanismos implementados para proteger contra tentativas de invasão:
+
+- **Contador de Falhas**: Rastreamento do número de tentativas de login malsucedidas.
+- **Bloqueio Temporário**: Após 5 tentativas falhas, a conta é bloqueada por 15 minutos.
+- **Mensagens de Erro Genéricas**: As mensagens de erro não revelam se o email ou a senha estão incorretos.
+
+### Atualizações de Segurança
+
+Para manter a segurança do sistema:
+
+1. Verifique regularmente as chaves JWT em `data/jwt_keys.json`.
+2. Execute a migração do Alembic para atualizar o banco de dados: `alembic upgrade head`.
+3. Monitore o arquivo de log para identificar tentativas de login suspeitas ou bloqueios de conta. 

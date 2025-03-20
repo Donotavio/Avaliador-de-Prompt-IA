@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
@@ -12,12 +12,23 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
+import jwt
+from passlib.context import CryptContext
 
 from services.database import get_db
 from models.user import User
 from schemas.user_schema import UserCreate, User as UserSchema, PasswordRecovery, PasswordReset
-from schemas.token_schema import Token
-from services.auth import authenticate_user, create_access_token, get_current_user
+from schemas.token_schema import Token, RefreshRequest
+from services.auth import (
+    authenticate_user, 
+    get_current_user, 
+    create_tokens_for_user, 
+    get_client_ip,
+    decode_token,
+    create_access_token,
+    oauth2_scheme
+)
+from services.token_security import JWT_ACCESS_TOKEN_EXPIRE_MINUTES
 from services.abacate_pay import AbacatePayClient
 
 # Carrega variáveis de ambiente
@@ -37,6 +48,9 @@ logger = logging.getLogger(__name__)
 
 # Cliente do AbacatePay
 abacate_pay_client = AbacatePayClient()
+
+# Configuração para hash de senha
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def sanitize_cpf_cnpj(value: str) -> str:
     """
@@ -193,134 +207,413 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)) -> Any:
 @router.post("/login", response_model=Token)
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ) -> Dict[str, Any]:
     """
     Login OAuth2 com username e password
     """
-    user = authenticate_user(db, form_data.username, form_data.password)
+    # Verificação de bloqueio por tentativas excessivas
+    client_ip = get_client_ip(request) if request else "unknown"
+    now = datetime.utcnow()
     
-    if not user:
+    # Busca o usuário no banco
+    user = db.query(User).filter(User.email == form_data.username).first()
+    
+    # Verificar se o usuário está bloqueado
+    if user and user.locked_until and user.locked_until > now:
+        # Calcula o tempo restante de bloqueio em minutos
+        remaining_minutes = int((user.locked_until - now).total_seconds() / 60) + 1
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Conta temporariamente bloqueada. Tente novamente em {remaining_minutes} minutos.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    
+    # Tenta autenticar o usuário
+    authenticated_user = authenticate_user(db, form_data.username, form_data.password)
+    
+    if not authenticated_user:
+        # Incrementa contador de falhas de login
+        if user:
+            user.failed_login_attempts += 1
+            
+            # Bloqueia a conta após 5 tentativas falhas
+            if user.failed_login_attempts >= 5:
+                # Bloqueio de 15 minutos
+                user.locked_until = now + timedelta(minutes=15)
+                logger.warning(f"Conta bloqueada por excesso de tentativas: {user.email} ({client_ip})")
+            
+            db.commit()
+            
+            if user.failed_login_attempts >= 5:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Conta temporariamente bloqueada por excesso de tentativas. Tente novamente em 15 minutos.",
+                    headers={"WWW-Authenticate": "Bearer"}
+                )
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou senha incorretos",
             headers={"WWW-Authenticate": "Bearer"}
         )
     
-    # Cria token JWT
-    access_token = create_access_token(data={"sub": user.id})
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user_id": user.id,
-        "email": user.email,
-        "full_name": user.full_name,
-        "is_admin": user.is_admin
-    }
-
-@router.post("/forgot-password", status_code=status.HTTP_200_OK)
-def forgot_password(recovery_data: PasswordRecovery, db: Session = Depends(get_db)) -> Dict[str, Any]:
-    """
-    Inicia processo de recuperação de senha para um usuário
-    """
-    # Procura usuário pelo e-mail
-    user = db.query(User).filter(User.email == recovery_data.email).first()
-    
-    # Mesmo que o usuário não exista, retornamos sucesso para evitar 
-    # a descoberta de e-mails válidos (proteção contra enumeração)
-    if not user:
-        logger.info(f"Tentativa de recuperação para e-mail não cadastrado: {recovery_data.email}")
-        return {"message": "Se o e-mail estiver cadastrado, você receberá instruções para recuperar sua senha."}
-    
-    # Gera um token único para recuperação de senha
-    reset_token = secrets.token_urlsafe(32)
-    reset_expiry = datetime.utcnow() + timedelta(hours=1)  # Token válido por 1 hora
-    
-    # Armazena token e data de expiração
-    user.reset_password_token = reset_token
-    user.reset_password_expires = reset_expiry
+    # Resetar contador de tentativas falhas e bloqueio
+    authenticated_user.failed_login_attempts = 0
+    authenticated_user.locked_until = None
+    authenticated_user.last_login = now
     db.commit()
     
-    # URL para o frontend com o token
-    reset_url = f"{recovery_data.frontend_url}?token={reset_token}"
+    # Gera tokens JWT
+    tokens = create_tokens_for_user(authenticated_user)
     
-    # Template HTML do e-mail
-    html_content = f"""
-    <html>
+    # Registra token ativo
+    if not authenticated_user.active_tokens:
+        authenticated_user.active_tokens = []
+    
+    # Adiciona informações sobre a sessão
+    token_info = {
+        "token_id": secrets.token_hex(8),
+        "issued_at": now.isoformat(),
+        "expires_at": (now + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)).isoformat(),
+        "ip": client_ip,
+        "user_agent": request.headers.get("User-Agent", "Unknown") if request else "Unknown"
+    }
+    
+    authenticated_user.active_tokens.append(token_info)
+    
+    # Manter no máximo 5 tokens ativos por usuário (sessões simultâneas)
+    if len(authenticated_user.active_tokens) > 5:
+        authenticated_user.active_tokens = authenticated_user.active_tokens[-5:]
+    
+    db.commit()
+    
+    return tokens
+
+@router.post("/refresh", response_model=Token)
+def refresh_token(
+    refresh_request: RefreshRequest,
+    db: Session = Depends(get_db),
+    request: Request = None
+) -> Dict[str, Any]:
+    """
+    Renova o token de acesso usando um refresh token
+    """
+    try:
+        # Decodifica o refresh token
+        payload = decode_token(refresh_request.refresh_token)
+        
+        # Verifica se é um token de refresh
+        if payload.get("type") != "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token inválido para refresh",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+        
+        # Busca o usuário
+        user_id = payload.get("sub")
+        user = db.query(User).filter(User.id == user_id).first()
+        
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuário inválido ou inativo",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+        
+        # Gera novos tokens
+        tokens = create_tokens_for_user(user)
+        
+        # Atualiza informações de sessão
+        if not user.active_tokens:
+            user.active_tokens = []
+        
+        # Adiciona informações sobre a nova sessão
+        client_ip = get_client_ip(request) if request else "unknown"
+        now = datetime.utcnow()
+        
+        token_info = {
+            "token_id": secrets.token_hex(8),
+            "refreshed_at": now.isoformat(),
+            "expires_at": (now + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)).isoformat(),
+            "ip": client_ip,
+            "user_agent": request.headers.get("User-Agent", "Unknown") if request else "Unknown"
+        }
+        
+        user.active_tokens.append(token_info)
+        
+        # Manter no máximo 5 tokens ativos por usuário
+        if len(user.active_tokens) > 5:
+            user.active_tokens = user.active_tokens[-5:]
+        
+        db.commit()
+        
+        return tokens
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao processar refresh de token: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Falha ao renovar o token",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+@router.post("/logout")
+def logout(
+    current_user: User = Depends(get_current_user),
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+) -> Dict[str, str]:
+    """
+    Realiza logout, invalidando o token atual
+    """
+    try:
+        # Decodifica o token para obter seu ID (sem validar)
+        header = jwt.get_unverified_header(token)
+        kid = header.get("kid", "unknown")
+        
+        # Remove o token da lista de tokens ativos
+        if current_user.active_tokens:
+            current_user.active_tokens = [
+                t for t in current_user.active_tokens 
+                if t.get("token_id") != kid
+            ]
+            db.commit()
+        
+        return {"message": "Logout realizado com sucesso"}
+    
+    except Exception as e:
+        logger.error(f"Erro ao processar logout: {str(e)}")
+        # Mesmo com erro, indicamos sucesso para o cliente
+        return {"message": "Logout realizado com sucesso"}
+
+@router.post("/logout-all")
+def logout_all(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Dict[str, str]:
+    """
+    Realiza logout de todas as sessões do usuário
+    """
+    try:
+        # Limpa todos os tokens ativos
+        current_user.active_tokens = []
+        db.commit()
+        
+        return {"message": "Todas as sessões foram encerradas com sucesso"}
+    
+    except Exception as e:
+        logger.error(f"Erro ao processar logout de todas as sessões: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao processar a requisição"
+        )
+
+@router.get("/sessions")
+def list_active_sessions(
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Lista todas as sessões ativas do usuário
+    """
+    sessions = []
+    
+    if current_user.active_tokens:
+        for token in current_user.active_tokens:
+            session = {
+                "session_id": token.get("token_id", "unknown"),
+                "started_at": token.get("issued_at") or token.get("refreshed_at", "unknown"),
+                "expires_at": token.get("expires_at", "unknown"),
+                "ip": token.get("ip", "unknown"),
+                "user_agent": token.get("user_agent", "unknown")
+            }
+            sessions.append(session)
+    
+    return {
+        "user_id": current_user.id,
+        "email": current_user.email,
+        "active_sessions": sessions
+    }
+
+@router.delete("/sessions/{session_id}")
+def terminate_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Dict[str, str]:
+    """
+    Encerra uma sessão específica do usuário
+    """
+    if not current_user.active_tokens:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sessão não encontrada"
+        )
+    
+    # Procura e remove a sessão específica
+    original_count = len(current_user.active_tokens)
+    current_user.active_tokens = [
+        t for t in current_user.active_tokens 
+        if t.get("token_id") != session_id
+    ]
+    
+    # Verifica se algo foi removido
+    if len(current_user.active_tokens) == original_count:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sessão não encontrada"
+        )
+    
+    db.commit()
+    
+    return {"message": "Sessão encerrada com sucesso"}
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+def forgot_password(recover: PasswordRecovery, db: Session = Depends(get_db)) -> Dict[str, str]:
+    """
+    Envia e-mail de recuperação de senha
+    """
+    try:
+        # Busca usuário pelo e-mail
+        user = db.query(User).filter(User.email == recover.email).first()
+        
+        if not user:
+            # Não revela se o e-mail existe (proteção contra enumeração)
+            logger.warning(f"Tentativa de recuperação para e-mail não cadastrado: {recover.email}")
+            return {"message": "Se o e-mail estiver cadastrado, você receberá as instruções de recuperação."}
+            
+        # Gera token aleatório
+        reset_token = secrets.token_urlsafe(32)
+        expiration = datetime.utcnow() + timedelta(hours=1)
+        
+        # Salva token no banco
+        user.reset_password_token = reset_token
+        user.reset_password_expires = expiration
+        db.commit()
+        
+        # Prepara e-mail
+        sender_email = EMAIL_USER
+        receiver_email = user.email
+        
+        # Cria mensagem
+        message = MIMEMultipart("alternative")
+        message["Subject"] = "Recuperação de Senha - Prompt AI Evaluator"
+        message["From"] = sender_email
+        message["To"] = receiver_email
+        
+        # Cria link de recuperação
+        recovery_link = f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/reset-password?token={reset_token}"
+        
+        # Cria conteúdo HTML
+        html = f"""
+        <html>
         <body>
             <h2>Recuperação de Senha</h2>
             <p>Olá {user.full_name},</p>
-            <p>Recebemos uma solicitação para recuperar sua senha. Se você não fez esta solicitação, ignore este e-mail.</p>
-            <p>Para criar uma nova senha, clique no link abaixo:</p>
-            <p><a href="{reset_url}">Redefinir minha senha</a></p>
+            <p>Você solicitou a recuperação de senha para sua conta no Prompt AI Evaluator.</p>
+            <p>Clique no link abaixo para definir uma nova senha:</p>
+            <p><a href="{recovery_link}">Recuperar senha</a></p>
             <p>Este link é válido por 1 hora.</p>
-            <p>Atenciosamente,<br>Equipe de Suporte</p>
+            <p>Se você não solicitou esta recuperação, ignore este e-mail.</p>
+            <p>Atenciosamente,<br>Equipe Prompt AI Evaluator</p>
         </body>
-    </html>
-    """
-    
-    # Envia e-mail com link de recuperação
-    email_sent = send_email(
-        user.email,
-        "Recuperação de Senha",
-        html_content
-    )
-    
-    if not email_sent:
+        </html>
+        """
+        
+        # Adiciona partes à mensagem
+        message.attach(MIMEText(html, "html"))
+        
+        try:
+            # Configura servidor SMTP
+            server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
+            server.starttls()
+            server.login(sender_email, EMAIL_PASSWORD)
+            
+            # Envia e-mail
+            server.sendmail(sender_email, receiver_email, message.as_string())
+            server.quit()
+            logger.info(f"E-mail de recuperação enviado para: {recover.email}")
+            
+        except Exception as e:
+            logger.error(f"Erro ao enviar e-mail de recuperação: {str(e)}")
+            # Não revelar erro específico ao usuário
+        
+        return {"message": "Se o e-mail estiver cadastrado, você receberá as instruções de recuperação."}
+        
+    except OperationalError as e:
+        logger.error(f"Erro de banco ao processar recuperação de senha: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Serviço temporariamente indisponível. Tente novamente em alguns instantes."
+        )
+    except Exception as e:
+        logger.error(f"Erro inesperado na recuperação de senha: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro ao enviar e-mail de recuperação"
+            detail="Erro ao processar a solicitação."
         )
-    
-    logger.info(f"E-mail de recuperação enviado para: {user.email}")
-    return {"message": "Se o e-mail estiver cadastrado, você receberá instruções para recuperar sua senha."}
+
+def get_password_hash(password: str) -> str:
+    """Gera um hash da senha"""
+    return pwd_context.hash(password)
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)
-def reset_password(reset_data: PasswordReset, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def reset_password(reset: PasswordReset, db: Session = Depends(get_db)) -> Dict[str, str]:
     """
-    Redefine a senha do usuário após validação do token
+    Redefine a senha com o token de recuperação
     """
-    # Busca usuário pelo token
-    user = db.query(User).filter(
-        User.reset_password_token == reset_data.token
-    ).first()
-    
-    # Verifica se o token existe e é válido
-    if not user or not user.reset_password_expires:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token inválido ou expirado"
-        )
-    
-    # Verifica se o token expirou
-    if datetime.utcnow() > user.reset_password_expires:
-        # Limpa o token expirado
+    try:
+        now = datetime.utcnow()
+        
+        # Verifica token e expiração
+        user = db.query(User).filter(
+            User.reset_password_token == reset.token,
+            User.reset_password_expires > now
+        ).first()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token inválido ou expirado."
+            )
+            
+        # Atualiza a senha
+        hashed_password = get_password_hash(reset.password)
+        user.hashed_password = hashed_password
+        
+        # Limpa o token de recuperação
         user.reset_password_token = None
         user.reset_password_expires = None
-        db.commit()
         
+        # Registra último login para o usuário
+        user.last_login = now
+        
+        db.commit()
+        logger.info(f"Senha redefinida com sucesso para o usuário: {user.email}")
+        
+        # Gera token de acesso após redefinição bem sucedida
+        access_token = create_tokens_for_user(user)
+        
+        return {
+            "message": "Senha redefinida com sucesso!",
+            "token": access_token
+        }
+        
+    except HTTPException:
+        raise
+    except OperationalError as e:
+        logger.error(f"Erro de banco ao redefinir senha: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token expirado. Solicite um novo link de recuperação."
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Serviço temporariamente indisponível. Tente novamente em alguns instantes."
         )
-    
-    # Verifica força da senha
-    if len(reset_data.new_password) < 8:
+    except Exception as e:
+        logger.error(f"Erro inesperado na redefinição de senha: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A senha deve ter pelo menos 8 caracteres"
-        )
-    
-    # Atualiza a senha
-    user.hashed_password = User.get_password_hash(reset_data.new_password)
-    
-    # Limpa o token após o uso
-    user.reset_password_token = None
-    user.reset_password_expires = None
-    
-    # Salva as alterações
-    db.commit()
-    
-    logger.info(f"Senha redefinida com sucesso para o usuário: {user.email}")
-    return {"message": "Senha redefinida com sucesso"} 
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao processar a solicitação."
+        ) 

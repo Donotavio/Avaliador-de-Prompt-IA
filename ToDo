@@ -1,7 +1,3 @@
-1.2 Configuração CORS Insegura
-Severidade: Alta
-A configuração CORS atual permite acesso de qualquer origem (allow_origins=["*"]).
-
 1.3 Gestão de Sessões e JWT
 Severidade: Alta
 A configuração atual do JWT tem um tempo de expiração muito longo (7 dias) e utiliza uma chave secreta hardcoded.
