@@ -201,3 +201,79 @@ result = connection.execute(f"SELECT * FROM users WHERE email = '{email}'")  # I
 # Use:
 from utils.sql_security import safe_execute
 result = safe_execute(connection, "SELECT * FROM users WHERE email = :email", {"email": email}) 
+```
+
+## Prevenção contra XSS em Emails
+
+A aplicação implementa sanitização rigorosa de conteúdo HTML para prevenir vulnerabilidades XSS (Cross-Site Scripting) em emails:
+
+### Sanitização de HTML
+
+- **Biblioteca Bleach**: Utilizamos a biblioteca Bleach para sanitizar todo o conteúdo HTML antes de enviar emails.
+- **Lista de Tags Permitidas**: Apenas um conjunto restrito de tags HTML é permitido (a, p, b, i, etc.), removendo qualquer tag potencialmente perigosa.
+- **Atributos Filtrados**: Apenas atributos seguros são permitidos em cada tag, evitando atributos como onclick, onerror, etc.
+- **Validação de Links**: URLs são validados para garantir que apontem apenas para domínios confiáveis.
+
+### Proteções Adicionais
+
+- **Verificação Dupla**: Além da sanitização principal, uma verificação secundária detecta padrões de XSS que possam ter passado pelo filtro inicial.
+- **Fallback Seguro**: Em caso de detecção de conteúdo potencialmente malicioso, todo o HTML é removido e apenas texto puro é enviado.
+- **Templates Seguros**: Utilizamos templates pré-definidos para emails, minimizando o risco de injeção de código malicioso.
+
+### Validação de Links de Recuperação
+
+Os links de recuperação de senha passam por validações específicas:
+
+- **Validação de Formato**: O formato da URL é verificado através de expressões regulares.
+- **Domínios Restritos**: Apenas domínios específicos são permitidos nos links (avaliadorprompt.com.br, localhost).
+- **Logging de Segurança**: Tentativas de incluir links maliciosos são registradas para análise.
+
+### Exemplo de Uso
+
+Para enviar emails com conteúdo HTML seguro, utilize as funções do módulo `utils.email_security`:
+
+```python
+from utils.email_security import sanitize_html, create_safe_email_template
+
+# Sanitizar conteúdo HTML
+safe_content = sanitize_html(html_input)
+
+# Ou criar um template completo seguro
+email_body = create_safe_email_template(
+    title="Título do Email",
+    header="Cabeçalho do Email",
+    main_content="<p>Conteúdo principal do email</p>"
+)
+```
+
+## Recomendações Adicionais para Hostinger
+
+Ao implantar na Hostinger, siga estas recomendações adicionais:
+
+1. Configure o `.htaccess` para reforçar HTTPS e adicionar camadas extras de segurança:
+
+```apache
+# Redirecionar para HTTPS
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Desativar listagem de diretórios
+Options -Indexes
+
+# Prevenir acesso a arquivos sensíveis
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Prevenir acesso a arquivos de configuração
+<FilesMatch "\.(env|config|json|md|gitignore|htaccess|log|py[cod]|po|pot|ini)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+```
+
+2. Configure um firewall no painel da Hostinger para limitar acessos indesejados.
+
+3. Certifique-se de que o certificado SSL está configurado corretamente.

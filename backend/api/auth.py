@@ -30,6 +30,7 @@ from services.auth import (
 )
 from services.token_security import JWT_ACCESS_TOKEN_EXPIRE_MINUTES
 from services.abacate_pay import AbacatePayClient
+from utils.email_security import sanitize_html, create_safe_email_template, sanitize_recovery_link
 
 # Carrega variáveis de ambiente
 load_dotenv()
@@ -77,13 +78,16 @@ def send_email(to_email: str, subject: str, html_content: str) -> bool:
         return False
     
     try:
+        # Sanitiza o conteúdo HTML para evitar XSS
+        safe_html = sanitize_html(html_content)
+        
         message = MIMEMultipart()
         message["From"] = EMAIL_FROM
         message["To"] = to_email
         message["Subject"] = subject
         
-        # Adiciona o corpo HTML
-        message.attach(MIMEText(html_content, "html"))
+        # Adiciona o corpo HTML sanitizado
+        message.attach(MIMEText(safe_html, "html"))
         
         # Conecta ao servidor SMTP
         if EMAIL_PORT == 465:
@@ -478,6 +482,9 @@ def forgot_password(recover: PasswordRecovery, db: Session = Depends(get_db)) ->
     Envia e-mail de recuperação de senha
     """
     try:
+        # Log das variáveis de ambiente de email para debug
+        logger.info(f"DEBUG - Configurações de email: HOST={EMAIL_HOST}, PORT={EMAIL_PORT}, USER={EMAIL_USER}, FROM={EMAIL_FROM}")
+        
         # Busca usuário pelo e-mail
         user = db.query(User).filter(User.email == recover.email).first()
         
@@ -495,51 +502,71 @@ def forgot_password(recover: PasswordRecovery, db: Session = Depends(get_db)) ->
         user.reset_password_expires = expiration
         db.commit()
         
-        # Prepara e-mail
+        # Prepara variáveis para e-mail
         sender_email = EMAIL_USER
         receiver_email = user.email
         
-        # Cria mensagem
-        message = MIMEMultipart("alternative")
-        message["Subject"] = "Recuperação de Senha - Prompt AI Evaluator"
-        message["From"] = sender_email
-        message["To"] = receiver_email
+        # Cria link de recuperação e sanitiza
+        base_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+        recovery_link_raw = f"{base_url}/reset-password?token={reset_token}"
+        recovery_link = sanitize_recovery_link(recovery_link_raw)
         
-        # Cria link de recuperação
-        recovery_link = f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/reset-password?token={reset_token}"
+        if not recovery_link:
+            logger.error(f"Link de recuperação inválido: {recovery_link_raw}")
+            recovery_link = "#"  # Link vazio em caso de falha na sanitização
         
-        # Cria conteúdo HTML
-        html = f"""
-        <html>
-        <body>
-            <h2>Recuperação de Senha</h2>
-            <p>Olá {user.full_name},</p>
-            <p>Você solicitou a recuperação de senha para sua conta no Prompt AI Evaluator.</p>
-            <p>Clique no link abaixo para definir uma nova senha:</p>
-            <p><a href="{recovery_link}">Recuperar senha</a></p>
-            <p>Este link é válido por 1 hora.</p>
-            <p>Se você não solicitou esta recuperação, ignore este e-mail.</p>
-            <p>Atenciosamente,<br>Equipe Prompt AI Evaluator</p>
-        </body>
-        </html>
+        # Conteúdo HTML
+        title = "Recuperação de Senha"
+        header = f"Olá {sanitize_html(user.full_name)},"
+        main_content = f"""
+        <p>Você solicitou a recuperação de senha para sua conta no Prompt AI Evaluator.</p>
+        <p>Clique no link abaixo para definir uma nova senha:</p>
+        <p><a href="{recovery_link}">Recuperar senha</a></p>
+        <p>Este link é válido por 1 hora.</p>
+        <p>Se você não solicitou esta recuperação, ignore este e-mail.</p>
         """
         
-        # Adiciona partes à mensagem
-        message.attach(MIMEText(html, "html"))
+        # Cria template de e-mail seguro
+        html = create_safe_email_template(title, header, main_content)
         
         try:
+            # Cria mensagem
+            message = MIMEMultipart("alternative")
+            message["Subject"] = "Recuperação de Senha - Prompt AI Evaluator"
+            message["From"] = sender_email
+            message["To"] = receiver_email
+            
+            # Log para debug
+            logger.info(f"DEBUG - Enviando email para: {receiver_email}, Usando remetente: {sender_email}")
+            
+            # Adiciona partes à mensagem
+            message.attach(MIMEText(html, "html"))
+            
             # Configura servidor SMTP
-            server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
-            server.starttls()
-            server.login(sender_email, EMAIL_PASSWORD)
+            logger.info(f"DEBUG - Conectando ao servidor SMTP: {EMAIL_HOST}:{EMAIL_PORT}")
+            if EMAIL_PORT == 465:
+                # Usar conexão SSL direta para porta 465
+                server = smtplib.SMTP_SSL(EMAIL_HOST, EMAIL_PORT)
+                logger.info("DEBUG - Usando conexão SSL")
+            else:
+                # Usar TLS para outras portas (como 587)
+                server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
+                server.starttls()
+                logger.info("DEBUG - Usando conexão TLS")
             
             # Envia e-mail
+            logger.info("DEBUG - Autenticando no servidor SMTP")
+            server.login(sender_email, EMAIL_PASSWORD)
+            logger.info("DEBUG - Enviando email")
             server.sendmail(sender_email, receiver_email, message.as_string())
             server.quit()
             logger.info(f"E-mail de recuperação enviado para: {recover.email}")
             
         except Exception as e:
             logger.error(f"Erro ao enviar e-mail de recuperação: {str(e)}")
+            # Registra stack trace completo para debug
+            import traceback
+            logger.error(f"Stack trace completo: {traceback.format_exc()}")
             # Não revelar erro específico ao usuário
         
         return {"message": "Se o e-mail estiver cadastrado, você receberá as instruções de recuperação."}
@@ -561,8 +588,8 @@ def get_password_hash(password: str) -> str:
     """Gera um hash da senha"""
     return pwd_context.hash(password)
 
-@router.post("/reset-password", status_code=status.HTTP_200_OK)
-def reset_password(reset: PasswordReset, db: Session = Depends(get_db)) -> Dict[str, str]:
+@router.post("/reset-password", status_code=status.HTTP_200_OK, response_model=Token)
+def reset_password(reset: PasswordReset, db: Session = Depends(get_db)) -> Token:
     """
     Redefine a senha com o token de recuperação
     """
@@ -582,7 +609,7 @@ def reset_password(reset: PasswordReset, db: Session = Depends(get_db)) -> Dict[
             )
             
         # Atualiza a senha
-        hashed_password = get_password_hash(reset.password)
+        hashed_password = get_password_hash(reset.new_password)
         user.hashed_password = hashed_password
         
         # Limpa o token de recuperação
@@ -596,12 +623,9 @@ def reset_password(reset: PasswordReset, db: Session = Depends(get_db)) -> Dict[
         logger.info(f"Senha redefinida com sucesso para o usuário: {user.email}")
         
         # Gera token de acesso após redefinição bem sucedida
-        access_token = create_tokens_for_user(user)
+        tokens = create_tokens_for_user(user)
         
-        return {
-            "message": "Senha redefinida com sucesso!",
-            "token": access_token
-        }
+        return tokens
         
     except HTTPException:
         raise

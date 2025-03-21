@@ -21,6 +21,7 @@ import argparse
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.security_tests import test_cors_configuration, verify_security_headers
+from utils.email_security import sanitize_html, create_safe_email_template
 
 # Configuração de logging
 logging.basicConfig(
@@ -104,25 +105,32 @@ def send_security_alert(subject, message):
         return False
     
     try:
+        # Garante que o subject e message sejam strings
+        subject = str(subject)
+        message = str(message)
+        
+        # Sanitiza entradas para evitar XSS
+        safe_subject = sanitize_html(subject, allowed_tags=[])  # Sem tags HTML no assunto
+        
         for recipient in EMAIL_TO:
             msg = MIMEMultipart()
             msg["From"] = EMAIL_FROM
             msg["To"] = recipient
-            msg["Subject"] = f"[ALERTA DE SEGURANÇA] {subject}"
+            msg["Subject"] = f"[ALERTA DE SEGURANÇA] {safe_subject}"
             
-            # Corpo do email em formato HTML
-            html_body = f"""
-            <html>
-            <body>
-                <h2>Alerta de Segurança: {subject}</h2>
-                <p>Foi detectado um possível problema de segurança na aplicação.</p>
-                <h3>Detalhes:</h3>
-                <pre>{message}</pre>
-                <p>Data e hora: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-                <p>Este é um alerta automático. Por favor, verifique a aplicação o mais rápido possível.</p>
-            </body>
-            </html>
+            # Cria template de email seguro
+            title = "Alerta de Segurança"
+            header = f"Alerta de Segurança: {safe_subject}"
+            main_content = f"""
+            <p>Foi detectado um possível problema de segurança na aplicação.</p>
+            <h3>Detalhes:</h3>
+            <pre>{sanitize_html(message, allowed_tags=[])}</pre>
+            <p>Data e hora: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            <p>Este é um alerta automático. Por favor, verifique a aplicação o mais rápido possível.</p>
             """
+            
+            # Gera HTML sanitizado
+            html_body = create_safe_email_template(title, header, main_content)
             
             msg.attach(MIMEText(html_body, "html"))
             
