@@ -2,18 +2,6 @@
 Severidade: Média
 Diversas APIs não validam entradas adequadamente.
 
-3.1 Cabeçalhos de Segurança Ausentes
-Severidade: Média
-A aplicação não implementa cabeçalhos de segurança HTTP essenciais.
-
-3.2 TLS/SSL Configuração
-Severidade: Alta
-Não há configuração adequada forçando TLS/SSL.
-Correção Recomendada:
-Configure HTTPS na Hostinger com certificado SSL válido
-Implemente HSTS para forçar conexões seguras
-Configure versões TLS seguras (TLS 1.2+)
-
 3.3 Proteção contra DDoS
 Severidade: Média
 Não existe proteção adequada contra ataques de negação de serviço.
@@ -34,12 +22,14 @@ Configurar o firewall do servidor na Hostinger para:
 Limitar acesso SSH a IPs específicos
 Bloquear portas não utilizadas
 Implementar regras de filtragem para mitigar ataques DDoS
+
 6.2 Configuração HTTPS
 Severidade: Alta
 Adquirir e configurar certificado SSL/TLS
 Redirecionar todo tráfego HTTP para HTTPS
 Implementar HSTS
 Desativar versões antigas de TLS (1.0/1.1)
+
 6.3 Configuração do Banco de Dados
 Severidade: Alta
 Modificar as credenciais do banco de dados (já expostas no código)
