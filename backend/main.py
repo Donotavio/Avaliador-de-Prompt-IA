@@ -37,6 +37,8 @@ import logging
 from datetime import datetime
 
 from services.token_security import initialize_jwt_keys
+# Importação para proteção CSRF
+from services.csrf_protection import CSRFProtectionMiddleware
 
 # Constantes para configuração da API
 API_PREFIX = "/api"
@@ -107,6 +109,9 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],  # Métodos específicos permitidos
     allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],  # Cabeçalhos específicos permitidos
 )
+
+# Adiciona middleware de proteção CSRF
+app.add_middleware(CSRFProtectionMiddleware)
 
 # Inclui rotas com prefixo API
 app.include_router(auth.router, prefix=API_PREFIX)

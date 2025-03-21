@@ -45,6 +45,64 @@ A aplicação implementa os seguintes cabeçalhos de segurança em todas as resp
 | Content-Security-Policy     | Múltiplas diretivas                       | Previne XSS e outras injeções de conteúdo |
 | Referrer-Policy             | strict-origin-when-cross-origin           | Limita informações de referência          |
 
+## Proteção CSRF (Cross-Site Request Forgery)
+
+A aplicação implementa uma proteção robusta contra ataques CSRF, seguindo as melhores práticas recomendadas pelo OWASP:
+
+### Mecanismo Double Submit Cookie
+
+O sistema utiliza o padrão "Double Submit Cookie" para proteção CSRF:
+
+1. Um token CSRF é gerado no servidor e enviado ao cliente de duas formas:
+   - Como um cookie HTTP seguro (HttpOnly, Secure, SameSite=Strict)
+   - Como um valor na resposta JSON para ser armazenado no estado da aplicação frontend
+
+2. Nas requisições subsequentes que modificam dados (POST, PUT, DELETE), o cliente deve:
+   - Enviar o cookie automaticamente (gerenciado pelo navegador)
+   - Incluir o mesmo token no cabeçalho `X-CSRF-Token`
+
+3. O servidor valida que ambos os tokens coincidem antes de processar a requisição
+
+### Obtenção do Token CSRF
+
+Os tokens CSRF são gerados automaticamente nos seguintes casos:
+
+- Após login bem-sucedido (gerado automaticamente)
+- Explicitamente através do endpoint `/api/auth/csrf-token` (requer autenticação)
+
+### Implementação no Cliente
+
+O cliente (frontend) deve implementar:
+
+1. Armazenamento do token CSRF retornado pela API
+2. Inclusão do token no cabeçalho `X-CSRF-Token` em todas as requisições que modificam dados
+3. Atualização do token quando receber um novo (após login ou solicitação explícita)
+
+Exemplo de implementação no frontend:
+
+```javascript
+// Armazenar o token recebido após login
+const csrfToken = loginResponse.csrf_token;
+
+// Incluir o token nas requisições
+fetch('/api/user/profile', {
+  method: 'PUT',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-CSRF-Token': csrfToken
+  },
+  body: JSON.stringify(profileData)
+});
+```
+
+### Considerações de Segurança
+
+- Os tokens CSRF expiram após 1 hora
+- Os tokens são específicos para cada usuário
+- Tokens inválidos ou expirados resultam em erro 403 Forbidden
+- Rotas que não modificam dados (GET, HEAD, OPTIONS) estão isentas de verificação
+- Rotas de autenticação (login, registro) estão isentas de verificação
+
 ## Verificação Automática de Segurança
 
 A aplicação inclui ferramentas para verificação automática da configuração de segurança:

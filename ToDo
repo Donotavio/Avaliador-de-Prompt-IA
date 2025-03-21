@@ -22,10 +22,6 @@ Não existe proteção adequada contra ataques de negação de serviço.
 Severidade: Média
 A aplicação usa bcrypt, que é bom, mas com configuração padrão.
 
-5.1 Proteção CSRF
-Severidade: Alta
-Não há proteção adequada contra ataques CSRF.
-
 5.2 Proteção contra Ataques de Força Bruta
 Severidade: Alta
 Não há proteção adequada contra ataques de força bruta nas APIs de login e outros endpoints críticos.

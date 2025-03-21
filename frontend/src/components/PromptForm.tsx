@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { logger } from '../utils/logger';
 import PremiumModal from './PremiumModal';
 import EvaluationResult from './EvaluationResult';
 import ThinkingAnimation from './ThinkingAnimation';
+import { fetchCsrfToken } from '../services/api';
 
 // Ícones SVG inline
 const SparkleIcon = () => (
@@ -200,6 +200,13 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
       // Adicionar token de autenticação se disponível
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      try {
+        const csrfToken = await fetchCsrfToken();
+        headers['X-CSRF-Token'] = csrfToken;
+      } catch (error) {
+        console.warn('Não foi possível obter token CSRF. Tentando continuar sem ele.');
       }
       
       const response = await fetch('/evaluate', {
@@ -432,4 +439,4 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
   );
 };
 
-export default PromptForm; 
+export default PromptForm;

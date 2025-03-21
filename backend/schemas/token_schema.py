@@ -14,6 +14,7 @@ class Token(BaseModel):
     email: str
     full_name: str
     is_admin: bool
+    csrf_token: Optional[str] = None  # Token CSRF para proteção contra ataques CSRF
 
 class TokenData(BaseModel):
     """

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
@@ -31,6 +31,7 @@ from services.auth import (
 from services.token_security import JWT_ACCESS_TOKEN_EXPIRE_MINUTES
 from services.abacate_pay import AbacatePayClient
 from utils.email_security import sanitize_html, create_safe_email_template, sanitize_recovery_link
+from services.csrf_protection import generate_csrf_token, set_csrf_token
 
 # Carrega variáveis de ambiente
 load_dotenv()
@@ -209,7 +210,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)) -> Any:
         )
 
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db), request: Request = None):
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db), request: Request = None, response: Response = None):
     """
     Gera um token de acesso JWT para o usuário
     """
@@ -219,7 +220,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         logger.info(f"Tentativa de login de IP: {client_ip}")
         
         # Autentica o usuário
-        user = authenticate_user(form_data.username, form_data.password, db)
+        user = authenticate_user(db=db, email=form_data.username, password=form_data.password)
         
         if not user:
             raise HTTPException(
@@ -249,20 +250,61 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             
         db.commit()
         
-        return tokens
-    
-    except OperationalError as e:
-        logger.error(f"Erro de banco ao processar login: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Serviço temporariamente indisponível. Tente novamente em alguns instantes."
-        )
+        # Gera token CSRF para o usuário
+        csrf_token = generate_csrf_token(str(user.id))
+        
+        # Define o token CSRF no cookie
+        if response:
+            set_csrf_token(response, csrf_token)
+        
+        # Retorna os tokens de acesso e atualização junto com o token CSRF
+        tokens_dict = tokens.dict()
+        return {
+            **tokens_dict,
+            "csrf_token": csrf_token  # Inclui o token CSRF na resposta
+        }
+        
     except Exception as e:
-        logger.error(f"Erro inesperado na autenticação: {str(e)}")
+        logger.error(f"Erro ao realizar login: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro ao processar a solicitação."
+            detail="Erro interno ao processar login"
         )
+
+@router.get("/csrf-token")
+async def get_csrf_token(response: Response, request: Request):
+    """
+    Gera um novo token CSRF.
+    O token é retornado na resposta e também definido em um cookie.
+    
+    Returns:
+        dict: Contendo o token CSRF
+    """
+    # Tenta obter o usuário atual se autenticado
+    user_id = None
+    try:
+        token = request.headers.get("Authorization")
+        if token and token.startswith("Bearer "):
+            token = token.replace("Bearer ", "")
+            # Decode the token to get the user_id
+            payload = decode_token(token)
+            user_id = payload.get("sub")
+    except Exception as e:
+        # Se não conseguir obter o usuário, usa um ID temporário
+        pass
+    
+    # Se não tiver usuário, usa um ID temporário
+    if not user_id:
+        user_id = f"temp_{secrets.token_hex(8)}"
+    
+    # Gera um novo token CSRF para o usuário
+    csrf_token = generate_csrf_token(user_id)
+    
+    # Define o token no cookie
+    set_csrf_token(response, csrf_token)
+    
+    # Retorna o token na resposta
+    return {"csrf_token": csrf_token}
 
 @router.post("/refresh", response_model=Token)
 def refresh_token(
