@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 from models.user import User
 from services.database import get_db
-from schemas.token_schema import TokenData
+from schemas.token_schema import TokenData, Token
 from services.token_security import (
     create_access_token as secure_create_access_token,
     create_refresh_token,
@@ -54,9 +54,15 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     logger.info(f"Usuário autenticado com sucesso: {email}")
     return user
 
-def create_tokens_for_user(user: User) -> Dict[str, Any]:
+def create_tokens_for_user(user: User) -> Token:
     """
     Cria tokens de acesso e refresh para um usuário
+    
+    Args:
+        user: Usuário para o qual criar os tokens
+        
+    Returns:
+        Token: Objeto Token com tokens de acesso e refresh
     """
     user_data = {
         "sub": str(user.id),
@@ -73,16 +79,17 @@ def create_tokens_for_user(user: User) -> Dict[str, Any]:
     # Calcula a expiração do token de acesso para informar ao cliente
     expires_at = datetime.utcnow() + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "expires_at": int(expires_at.timestamp()),
-        "user_id": user.id,
-        "email": user.email,
-        "full_name": user.full_name,
-        "is_admin": user.is_admin
-    }
+    # Retorna um objeto Token em vez de um dicionário
+    return Token(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        expires_at=int(expires_at.timestamp()),
+        user_id=str(user.id),
+        email=user.email,
+        full_name=user.full_name,
+        is_admin=user.is_admin
+    )
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """

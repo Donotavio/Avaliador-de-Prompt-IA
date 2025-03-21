@@ -3,6 +3,7 @@ from sqlalchemy.sql import func
 from passlib.context import CryptContext
 import uuid
 from datetime import datetime
+import logging
 
 from services.database import Base
 
@@ -62,9 +63,13 @@ class User(Base):
         try:
             return pwd_context.verify(password, self.hashed_password)
         except Exception as e:
-            print(f"Erro ao verificar senha: {str(e)}")
-            # Fallback para casos de erro no bcrypt
-            return False
+            # Registra o erro e propaga a exceção para evitar verificações inseguras
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erro crítico ao verificar senha: {str(e)}")
+            
+            # Não retornamos False como fallback, em vez disso lançamos exceção
+            # para garantir que a segurança não seja comprometida
+            raise RuntimeError("Falha crítica na verificação de senha") from e
     
     @staticmethod
     def get_password_hash(password: str) -> str:
@@ -72,8 +77,10 @@ class User(Base):
         try:
             return pwd_context.hash(password)
         except Exception as e:
-            print(f"Erro ao gerar hash: {str(e)}")
-            # Fallback para um método alternativo em caso de erro
-            import hashlib
-            salt = uuid.uuid4().hex
-            return hashlib.sha256(salt.encode() + password.encode()).hexdigest() + ':' + salt 
+            # Registra o erro e propaga a exceção para evitar senhas fracas
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erro crítico ao gerar hash de senha: {str(e)}")
+            
+            # Não utilizamos o fallback inseguro, em vez disso lançamos exceção
+            # para garantir que a segurança não seja comprometida
+            raise RuntimeError("Falha crítica na criptografia de senha") from e 

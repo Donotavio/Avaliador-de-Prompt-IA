@@ -277,3 +277,28 @@ Options -Indexes
 2. Configure um firewall no painel da Hostinger para limitar acessos indesejados.
 
 3. Certifique-se de que o certificado SSL está configurado corretamente.
+
+## Hashing de Senhas e Autenticação
+
+### Implementação segura de hash de senha
+
+O sistema utiliza o algoritmo bcrypt para hash de senhas, considerado seguro para este propósito. A configuração inclui:
+
+- **Algoritmo**: bcrypt (padrão da indústria)
+- **Rounds**: 12 (configurável via `bcrypt__rounds`)
+- **Versão**: 2b (versão compatível e segura)
+- **Tratamento de erros**: Erros no processo de hash são tratados de forma adequada, sem fallbacks inseguros
+
+Para garantir a segurança:
+- Não há mecanismos de fallback inseguros para o hash de senha
+- Erros de criptografia são registrados e propagados adequadamente
+- Qualquer falha no sistema de hash resultará em erro explícito, em vez de comprometer a segurança
+
+### Proteção contra ataques de força bruta
+
+O sistema implementa proteções contra ataques de força bruta:
+
+- Bloqueio de conta após 5 tentativas falhas de login (15 minutos)
+- Rastreamento de IPs suspeitos
+- Limites de sessões ativas por usuário (máximo 5)
+- Registro detalhado de tentativas de login em logs seguros

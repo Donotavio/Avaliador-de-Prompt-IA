@@ -1,13 +1,3 @@
-
-
-2.2 Vulnerabilidade XSS em Emails
-Severidade: Média
-O conteúdo HTML em emails não é sanitizado adequadamente.
-
-2.3 Fallback de Hash de Senha Inseguro
-Severidade: Alta
-A aplicação usa uma função de fallback insegura para hash de senha caso o bcrypt falhe.
-
 2.4 Validação de Entrada Inadequada
 Severidade: Média
 Diversas APIs não validam entradas adequadamente.

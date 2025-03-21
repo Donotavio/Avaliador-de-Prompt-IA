@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional, Any, List, Tuple
 from jose import jwt, JWTError
 from fastapi import HTTPException, status
+import functools
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +169,28 @@ def find_key_by_id(key_id: str) -> Optional[str]:
     
     return None
 
+def handle_security_exception(func):
+    """
+    Decorador para lidar com exceções de segurança de maneira padronizada
+    com registro de log detalhado e sem comprometer a segurança.
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except JWTError as e:
+            logger.error(f"Erro JWT: {e}")
+            # Não revela detalhes específicos do erro na mensagem de exceção
+            raise JWTError("Erro de autenticação")
+        except RuntimeError as e:
+            # Captura erros específicos de segurança de nossa implementação
+            logger.error(f"Erro crítico de segurança: {e}")
+            raise JWTError("Erro crítico no sistema de segurança")
+        except Exception as e:
+            logger.error(f"Erro inesperado em operação de segurança: {e}")
+            raise JWTError("Erro interno no sistema de segurança")
+    return wrapper
+
 def create_access_token(
     data: Dict[str, Any], 
     expires_delta: Optional[timedelta] = None
@@ -319,3 +342,8 @@ load_keys()
 
 # A função initialize_jwt_keys será chamada no início do servidor
 # para garantir que as chaves estejam prontas para uso 
+
+# Aplica o decorador às funções críticas de segurança
+create_access_token = handle_security_exception(create_access_token)
+create_refresh_token = handle_security_exception(create_refresh_token)
+decode_token = handle_security_exception(decode_token) 

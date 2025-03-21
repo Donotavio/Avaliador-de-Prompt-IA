@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 import logging
 import re
 import secrets
@@ -209,91 +209,60 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)) -> Any:
         )
 
 @router.post("/login", response_model=Token)
-def login(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db),
-    request: Request = None
-) -> Dict[str, Any]:
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db), request: Request = None):
     """
-    Login OAuth2 com username e password
+    Gera um token de acesso JWT para o usuário
     """
-    # Verificação de bloqueio por tentativas excessivas
-    client_ip = get_client_ip(request) if request else "unknown"
-    now = datetime.utcnow()
-    
-    # Busca o usuário no banco
-    user = db.query(User).filter(User.email == form_data.username).first()
-    
-    # Verificar se o usuário está bloqueado
-    if user and user.locked_until and user.locked_until > now:
-        # Calcula o tempo restante de bloqueio em minutos
-        remaining_minutes = int((user.locked_until - now).total_seconds() / 60) + 1
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Conta temporariamente bloqueada. Tente novamente em {remaining_minutes} minutos.",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-    
-    # Tenta autenticar o usuário
-    authenticated_user = authenticate_user(db, form_data.username, form_data.password)
-    
-    if not authenticated_user:
-        # Incrementa contador de falhas de login
-        if user:
-            user.failed_login_attempts += 1
-            
-            # Bloqueia a conta após 5 tentativas falhas
-            if user.failed_login_attempts >= 5:
-                # Bloqueio de 15 minutos
-                user.locked_until = now + timedelta(minutes=15)
-                logger.warning(f"Conta bloqueada por excesso de tentativas: {user.email} ({client_ip})")
-            
-            db.commit()
-            
-            if user.failed_login_attempts >= 5:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Conta temporariamente bloqueada por excesso de tentativas. Tente novamente em 15 minutos.",
-                    headers={"WWW-Authenticate": "Bearer"}
-                )
+    try:
+        # Obtem o IP do cliente para rastreamento
+        client_ip = get_client_ip(request)
+        logger.info(f"Tentativa de login de IP: {client_ip}")
         
+        # Autentica o usuário
+        user = authenticate_user(form_data.username, form_data.password, db)
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Email ou senha incorretos",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            
+        # Gera tokens de acesso e atualização
+        tokens = create_tokens_for_user(user)
+        
+        # Registra o token em user.active_tokens
+        if not user.active_tokens:
+            user.active_tokens = []
+            
+        # Adiciona o novo token à lista (com timestamp)
+        user.active_tokens.append({
+            "token_id": str(user.id),
+            "created_at": datetime.timestamp(datetime.utcnow()),
+            "user_agent": request.headers.get("user-agent", "unknown") if request else "unknown",
+            "ip_address": client_ip
+        })
+        
+        # Limita a 5 sessões ativas
+        if len(user.active_tokens) > 5:
+            user.active_tokens = user.active_tokens[-5:]
+            
+        db.commit()
+        
+        return tokens
+    
+    except OperationalError as e:
+        logger.error(f"Erro de banco ao processar login: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email ou senha incorretos",
-            headers={"WWW-Authenticate": "Bearer"}
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Serviço temporariamente indisponível. Tente novamente em alguns instantes."
         )
-    
-    # Resetar contador de tentativas falhas e bloqueio
-    authenticated_user.failed_login_attempts = 0
-    authenticated_user.locked_until = None
-    authenticated_user.last_login = now
-    db.commit()
-    
-    # Gera tokens JWT
-    tokens = create_tokens_for_user(authenticated_user)
-    
-    # Registra token ativo
-    if not authenticated_user.active_tokens:
-        authenticated_user.active_tokens = []
-    
-    # Adiciona informações sobre a sessão
-    token_info = {
-        "token_id": secrets.token_hex(8),
-        "issued_at": now.isoformat(),
-        "expires_at": (now + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)).isoformat(),
-        "ip": client_ip,
-        "user_agent": request.headers.get("User-Agent", "Unknown") if request else "Unknown"
-    }
-    
-    authenticated_user.active_tokens.append(token_info)
-    
-    # Manter no máximo 5 tokens ativos por usuário (sessões simultâneas)
-    if len(authenticated_user.active_tokens) > 5:
-        authenticated_user.active_tokens = authenticated_user.active_tokens[-5:]
-    
-    db.commit()
-    
-    return tokens
+    except Exception as e:
+        logger.error(f"Erro inesperado na autenticação: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao processar a solicitação."
+        )
 
 @router.post("/refresh", response_model=Token)
 def refresh_token(
@@ -586,7 +555,14 @@ def forgot_password(recover: PasswordRecovery, db: Session = Depends(get_db)) ->
 
 def get_password_hash(password: str) -> str:
     """Gera um hash da senha"""
-    return pwd_context.hash(password)
+    try:
+        return pwd_context.hash(password)
+    except Exception as e:
+        logger.error(f"Erro crítico ao gerar hash de senha: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro crítico no sistema de segurança. Por favor, entre em contato com o suporte."
+        )
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK, response_model=Token)
 def reset_password(reset: PasswordReset, db: Session = Depends(get_db)) -> Token:
@@ -640,4 +616,57 @@ def reset_password(reset: PasswordReset, db: Session = Depends(get_db)) -> Token
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao processar a solicitação."
-        ) 
+        )
+
+def authenticate_user(email: str, password: str, db: Session) -> Optional[User]:
+    """
+    Autentica um usuário verificando seu email e senha
+    """
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        
+        if not user:
+            logger.warning(f"Tentativa de login com email não cadastrado: {email}")
+            return None
+            
+        if not user.is_active:
+            logger.warning(f"Tentativa de login em conta inativa: {email}")
+            return None
+            
+        # Verifica se a conta está bloqueada devido a muitas tentativas de login
+        if user.locked_until and user.locked_until > datetime.utcnow():
+            logger.warning(f"Tentativa de login em conta bloqueada: {email}")
+            remaining_time = user.locked_until - datetime.utcnow()
+            # Não mostrar mensagem específica para evitar exposição de informação
+            return None
+        
+        try:
+            if not user.verify_password(password):
+                # Incrementa contador de falhas
+                user.failed_login_attempts += 1
+                
+                # Bloqueia a conta após 5 tentativas
+                if user.failed_login_attempts >= 5:
+                    user.locked_until = datetime.utcnow() + timedelta(minutes=15)
+                    logger.warning(f"Conta bloqueada após 5 tentativas falhas: {email}")
+                
+                db.commit()
+                logger.warning(f"Senha incorreta para o usuário: {email}")
+                return None
+                
+            # Login bem sucedido
+            user.failed_login_attempts = 0
+            user.last_login = datetime.utcnow()
+            db.commit()
+            logger.info(f"Login bem sucedido para o usuário: {email}")
+            return user
+        except RuntimeError as re:
+            # Captura exceção específica de erro de verificação de senha
+            logger.error(f"Erro crítico na verificação de senha: {str(re)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro crítico no sistema de autenticação. Tente novamente mais tarde."
+            )
+    except Exception as e:
+        logger.error(f"Erro ao autenticar usuário: {str(e)}")
+        return None 
