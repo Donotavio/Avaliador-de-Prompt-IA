@@ -264,23 +264,68 @@ class PromptEvaluator:
             if run_status != "completed":
                 if current_retry >= max_retries:
                     logger.error("Timeout ao aguardar conclusão da execução")
-                    raise ValueError("Timeout ao aguardar conclusão da execução")
+                    # Em vez de lançar uma exceção, vamos continuar e tentar recuperar dados parciais
+                    logger.warning("Tentando recuperar dados parciais mesmo após timeout")
                 else:
                     logger.error(f"Execução falhou com status: {run_status}")
-                    raise ValueError(f"Falha na execução do assistant: {run_status}")
+                    # Em vez de lançar uma exceção, vamos continuar e tentar recuperar dados parciais
+                    logger.warning("Tentando recuperar dados parciais mesmo após falha")
                 
-            # Obtém as mensagens
-            logger.info("Recuperando mensagens finais de resposta")
-            response = requests.get(
-                f"{base_url}/threads/{thread_id}/messages",
-                headers=headers
-            )
+                # Se chegarmos aqui, o status não é 'completed', mas vamos tentar recuperar dados parciais
+                logger.info("Usando os dados parciais disponíveis")
+                
+                # Verificamos se temos mensagens intermediárias que possam conter resultados parciais
+                partial_response = requests.get(
+                    f"{base_url}/threads/{thread_id}/messages",
+                    headers=headers
+                )
+                
+                if partial_response.status_code != 200:
+                    logger.error(f"Erro ao obter mensagens parciais: {partial_response.status_code}")
+                    # Neste caso, realmente não temos como continuar, então retornamos uma avaliação padrão
+                    return {
+                        "scores": {"clarity": 0, "context": 0, "effectiveness": 0, "average": 0},
+                        "suggestions": [f"Erro na avaliação: Falha na execução do assistant: {run_status}"],
+                        "optimized_prompt": prompt if isinstance(prompt, str) else prompt.content,
+                        "error": "evaluation_failed",
+                        "detailed_analysis": None,
+                    }
+                
+                # Tentamos extrair mensagens parciais
+                partial_messages = partial_response.json()
+                if isinstance(partial_messages, dict) and "data" in partial_messages and partial_messages["data"]:
+                    # Há mensagens, então continuamos o processamento normalmente
+                    messages_data = partial_messages
+                    logger.info(f"Recuperadas {len(messages_data.get('data', []))} mensagens parciais")
+                else:
+                    # Sem mensagens, retornamos uma avaliação padrão
+                    return {
+                        "scores": {"clarity": 0, "context": 0, "effectiveness": 0, "average": 0},
+                        "suggestions": [f"Erro na avaliação: Falha na execução do assistant: {run_status}"],
+                        "optimized_prompt": prompt if isinstance(prompt, str) else prompt.content,
+                        "error": "evaluation_failed",
+                        "detailed_analysis": None,
+                    }
+            else:
+                # Execução completada com sucesso, obtém as mensagens normalmente
+                logger.info("Recuperando mensagens finais de resposta")
+                response = requests.get(
+                    f"{base_url}/threads/{thread_id}/messages",
+                    headers=headers
+                )
 
-            if response.status_code != 200:
-                logger.error(f"Erro ao obter mensagens: {response.status_code} - {response.text}")
-                raise ValueError(f"Erro ao obter mensagens: {response.status_code}")
+                if response.status_code != 200:
+                    logger.error(f"Erro ao obter mensagens: {response.status_code} - {response.text}")
+                    return {
+                        "scores": {"clarity": 0, "context": 0, "effectiveness": 0, "average": 0},
+                        "suggestions": [f"Erro ao obter mensagens: {response.status_code}"],
+                        "optimized_prompt": prompt if isinstance(prompt, str) else prompt.content,
+                        "error": "failed_get_messages",
+                        "detailed_analysis": None,
+                    }
+                
+                messages_data = response.json()
             
-            messages_data = response.json()
             if not messages_data or not isinstance(messages_data, dict):
                 logger.error(f"Resposta messages_data inválida: {messages_data}")
                 return {
@@ -1677,10 +1722,17 @@ class PromptEvaluator:
                     result = await self._get_evaluation_from_assistant(prompt, context)
                     if result and not result.get("error"):
                         usage_manager.register_premium_usage(user_id)
+                    else:
+                        logger.info("Usando os dados parciais disponíveis")
                 else:
                     result = await self._get_evaluation_from_assistant(prompt, context)
                     if result and not result.get("error"):
                         usage_manager.register_free_usage(user_id)
+                    elif result and result.get("error") == "evaluation_failed":
+                        # Registra o uso mesmo em caso de erro parcial
+                        logger.info("Usando os dados parciais disponíveis")
+                        if user_id:
+                            usage_manager.register_free_usage(user_id)
             except Exception as e:
                 if "insufficient_quota" in str(e):
                     return {
@@ -1707,6 +1759,15 @@ class PromptEvaluator:
             if not result or not isinstance(result, dict):
                 return self._get_default_evaluation()
 
+            # Substituir os valores padrão se houver um erro conhecido
+            error_type = result.get("error")
+            if error_type == "evaluation_failed":
+                # Mensagem mais amigável para o usuário
+                suggestions = ["Ocorreu um erro durante a avaliação, mas conseguimos obter alguns resultados parciais. Por favor, tente novamente se os resultados não forem satisfatórios."]
+                if "suggestions" in result and result["suggestions"]:
+                    suggestions = result["suggestions"]
+                result["suggestions"] = suggestions
+            
             result.setdefault(
                 "scores", {"clarity": 0, "context": 0, "effectiveness": 0, "average": 0}
             )
