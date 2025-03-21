@@ -1,0 +1,59 @@
+# Backend API .htaccess configuration
+
+# Enable Apache rewrite engine
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Route all API requests to the Passenger WSGI handler
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^(.*)$ /api/$1 [QSA,L]
+</IfModule>
+
+# Security headers
+<IfModule mod_headers.c>
+    # HSTS (HTTP Strict Transport Security)
+    Header set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    
+    # Prevent browsers from incorrectly detecting non-scripts as scripts
+    Header set X-Content-Type-Options "nosniff"
+    
+    # Protection against clickjacking
+    Header set X-Frame-Options "SAMEORIGIN"
+    
+    # XSS Protection
+    Header set X-XSS-Protection "1; mode=block"
+    
+    # Referrer Policy
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Rate limiting with mod_ratelimit (if available on Hostinger)
+<IfModule mod_ratelimit.c>
+    # Limit bandwidth to 3000KB/s
+    SetOutputFilter RATE_LIMIT
+    SetEnv rate-limit 3000
+</IfModule>
+
+# Request timeout settings to prevent slow HTTP attacks
+<IfModule mod_reqtimeout.c>
+    RequestReadTimeout header=20-40,MinRate=500
+    RequestReadTimeout body=20,MinRate=500
+</IfModule>
+
+# Disable directory listing
+Options -Indexes
+
+# Deny access to sensitive files
+<FilesMatch "^(\.|.env|.env.production|requirements.txt)">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# PHP settings (if PHP is enabled)
+<IfModule mod_php7.c>
+    php_flag display_errors Off
+    php_value max_execution_time 60
+    php_value max_input_time 60
+    php_value memory_limit 256M
+    php_flag short_open_tag Off
+</IfModule>

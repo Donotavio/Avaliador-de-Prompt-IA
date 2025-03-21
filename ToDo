@@ -1,38 +1,68 @@
-2.4 Validação de Entrada Inadequada
-Severidade: Média
-Diversas APIs não validam entradas adequadamente.
+Instruções para Deploy em Produção na VPS
+Agora que temos os scripts necessários, vamos realizar o deploy da aplicação na VPS. Aqui está um passo a passo:
 
-3.3 Proteção contra DDoS
-Severidade: Média
-Não existe proteção adequada contra ataques de negação de serviço.
+1. Provisionar a VPS
+Primeiro, vamos preparar a VPS com todas as dependências necessárias:
 
-4.1 Armazenamento Seguro de Senhas
-Severidade: Média
-A aplicação usa bcrypt, que é bom, mas com configuração padrão.
+bash
+CopyInsert
+# Copie o script de setup para a VPS
+scp /Users/educbank/Documents/Pompt\ AI\ Avaliator/server-setup.sh root@69.62.101.14:/root/
 
-5.2 Proteção contra Ataques de Força Bruta
-Severidade: Alta
-Não há proteção adequada contra ataques de força bruta nas APIs de login e outros endpoints críticos.
+# Conecte-se à VPS e execute o script
+ssh root@69.62.101.14 "bash /root/server-setup.sh"
+Este script vai:
 
+Atualizar o sistema
+Instalar todas as dependências necessárias (Nginx, Python, etc.)
+Configurar o firewall para proteger a VPS
+Configurar o fail2ban para proteção contra força bruta
+Criar um usuário não-root para executar a aplicação
+Configurar o Nginx com configurações de segurança
+Configurar os serviços systemd para o backend
 
-6. Recomendações Específicas para Hostinger
-6.1 Configuração de Firewall
-Severidade: Alta
-Configurar o firewall do servidor na Hostinger para:
-Limitar acesso SSH a IPs específicos
-Bloquear portas não utilizadas
-Implementar regras de filtragem para mitigar ataques DDoS
+2. Fazer o Deploy da Aplicação
+Em seguida, vamos executar o script de deploy para enviar os arquivos da aplicação:
 
-6.2 Configuração HTTPS
-Severidade: Alta
-Adquirir e configurar certificado SSL/TLS
-Redirecionar todo tráfego HTTP para HTTPS
-Implementar HSTS
-Desativar versões antigas de TLS (1.0/1.1)
+bash
+CopyInsert
+# No seu computador local, no diretório do projeto
+cd /Users/educbank/Documents/Pompt\ AI\ Avaliator
+./deploy.sh
+Este script vai:
 
-6.3 Configuração do Banco de Dados
-Severidade: Alta
-Modificar as credenciais do banco de dados (já expostas no código)
-Restringir acesso ao banco de dados apenas ao servidor da aplicação
-Implementar backup regular e criptografado dos dados
-Definir permissões mínimas necessárias para o usuário do banco de dados
+Compilar o frontend
+Enviar os arquivos do frontend e backend para a VPS
+Configurar o ambiente Python
+Reiniciar os serviços necessários
+3. Configurar o SSL
+Finalmente, configure o certificado SSL:
+
+bash
+CopyInsert
+# Conecte-se à VPS
+ssh root@69.62.101.14
+
+# Execute o Certbot para configurar HTTPS
+certbot --nginx -d avaliadorprompt.com.br -d www.avaliadorprompt.com.br
+
+# Reinicie o Nginx
+systemctl restart nginx
+4. Verificações Pós-Deploy
+Verifique se o site está funcionando acessando https://avaliadorprompt.com.br
+Verifique os logs do backend:
+bash
+CopyInsert in Terminal
+ssh root@69.62.101.14 "journalctl -u avaliador-api -f"
+Verifique os logs do Nginx:
+bash
+CopyInsert in Terminal
+ssh root@69.62.101.14 "tail -f /var/log/nginx/error.log"
+Notas Importantes
+Segurança: O script de setup já implementa várias medidas de segurança:
+Firewall (ufw)
+Fail2ban para proteção contra ataques de força bruta
+Cabeçalhos de segurança HTTP
+Limitação de taxa para APIs
+Banco de Dados: O arquivo .env.production inclui as credenciais do banco de dados, mas você deve verificar a conexão com o banco.
+DNS: Certifique-se de que o domínio avaliadorprompt.com.br está apontando para o IP da VPS (69.62.101.14).

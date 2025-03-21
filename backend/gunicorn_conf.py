@@ -6,7 +6,7 @@ workers = multiprocessing.cpu_count() * 2 + 1
 worker_class = "uvicorn.workers.UvicornWorker"
 
 # Socket binding
-bind = "unix:/tmp/gunicorn.sock"  # Using socket instead of port for nginx
+bind = "unix:/tmp/avaliador-api.sock"  # Using socket instead of port for nginx
 
 # Logging
 loglevel = "info"
@@ -25,3 +25,20 @@ keepalive = 5
 worker_connections = 1000
 max_requests = 1000
 max_requests_jitter = 50
+
+# SSL/TLS settings 
+# Will be handled by Nginx, but we'll ensure the Gunicorn app only accepts local connections
+forwarded_allow_ips = "127.0.0.1"
+
+# Security settings
+limit_request_line = 4094
+limit_request_fields = 100
+limit_request_field_size = 8190
+
+# Proxy header settings (for security)
+secure_scheme_headers = {
+    'X-FORWARDED-PROTO': 'https',
+}
+
+# Daemonize (no need when using systemd)
+daemon = False
