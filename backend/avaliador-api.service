@@ -3,15 +3,14 @@ Description=Avaliador Prompt API Service
 After=network.target
 
 [Service]
-User=yourhostingusername
-Group=yourhostingusername
-WorkingDirectory=/home/yourhostingusername/avaliadorprompt.com.br/backend
-ExecStart=/home/yourhostingusername/avaliadorprompt.com.br/venv/bin/gunicorn -c gunicorn_conf.py main:app
-Restart=always
-RestartSec=5
-Environment="PATH=/home/yourhostingusername/avaliadorprompt.com.br/venv/bin"
-# Make sure to replace this with actual path to your .env.production file
-EnvironmentFile=/home/yourhostingusername/avaliadorprompt.com.br/backend/.env.production
+User=appuser
+Group=appuser
+WorkingDirectory=/var/www/avaliadorprompt/backend
+ExecStart=/var/www/avaliadorprompt/venv/bin/python run_server.py
+Restart=on-failure
+RestartSec=10
+Environment="PATH=/var/www/avaliadorprompt/venv/bin"
+EnvironmentFile=/var/www/avaliadorprompt/backend/.env.production
 
 [Install]
 WantedBy=multi-user.target

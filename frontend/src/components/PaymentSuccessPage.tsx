@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { API_BASE_URL } from '../services/api';
 
 interface PaymentSuccessPageProps {
   userId?: string;
@@ -38,8 +39,8 @@ const PaymentSuccessPage: React.FC<PaymentSuccessPageProps> = ({ userId }) => {
           return;
         }
         
-        // Chama o endpoint para verificar o status da assinatura atual
-        const response = await fetch(`/api/payments/status`, {
+        // Verificar status do pagamento no backend
+        const response = await fetch(`${API_BASE_URL}/payments/status`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -61,8 +62,8 @@ const PaymentSuccessPage: React.FC<PaymentSuccessPageProps> = ({ userId }) => {
           
           // Opcionalmente, informa o backend que o pagamento foi bem-sucedido
           try {
-            // Tenta ativar o pagamento no backend
-            const activationResponse = await fetch(`/api/payments/verify-payment/${result.subscription.abacate_payment_id}?success=true`, {
+            // Ativar a assinatura após o pagamento bem-sucedido
+            const activationResponse = await fetch(`${API_BASE_URL}/payments/verify-payment/${result.subscription.abacate_payment_id}?success=true`, {
               method: 'POST',
               headers: {
                 'Authorization': `Bearer ${token}`,

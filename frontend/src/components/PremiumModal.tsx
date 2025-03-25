@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CheckIcon } from '../components/Icons';
+import PaymentForm from './PaymentForm';
 
 interface PremiumModalProps {
   onClose: () => void;
@@ -9,104 +10,52 @@ interface PremiumModalProps {
 const PremiumModal: React.FC<PremiumModalProps> = ({ onClose, refreshPage = false }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
 
   const handleProceedToPayment = async () => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      // Verificar se o usuário está logado
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setError('Você precisa estar logado para assinar o plano premium.');
-        setTimeout(() => onClose(), 3000);
-        return;
-      }
-
-      // Obter dados do usuário do localStorage
-      const userDataStr = localStorage.getItem('user');
-      if (!userDataStr) {
-        setError('Não foi possível obter os dados do usuário.');
-        return;
-      }
-      
-      const userData = JSON.parse(userDataStr);
-      
-      // Dados mínimos necessários para o endpoint de pagamento
-      const paymentData = {
-        product_id: "premium_monthly", // ID do produto no backend
-        payment_method: "pix", // Método de pagamento padrão
-        customer: {
-          name: userData.fullName,
-          email: userData.email,
-          tax_id: "00000000000", // CPF genérico
-          phone: "11999998888", // Telefone genérico
-          address: {
-            street: "Rua do Cliente",
-            number: "123",
-            complement: "",
-            neighborhood: "Centro",
-            city: "São Paulo",
-            state: "SP",
-            country: "BR",
-            address_zip_code: "01000000"
-          }
-        },
-        completion_url: window.location.origin + "/payment-success"
-      };
-
-      console.log('Enviando dados para criar pagamento:', paymentData);
-
-      // Fazer requisição para o servidor para iniciar o pagamento
-      const response = await fetch('/api/payments/create', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(paymentData)
-      });
-
-      // Ler o corpo da resposta
-      let responseData;
-      try {
-        responseData = await response.json();
-      } catch (e) {
-        console.error('Erro ao parsejar resposta JSON:', e);
-        throw new Error('Erro ao processar resposta do servidor');
-      }
-      
-      if (!response.ok) {
-        // Extrair detalhes do erro
-        let errorMessage = 'Erro ao processar pagamento';
-        
-        if (responseData && responseData.detail) {
-          // Se o erro for um objeto, tentar extrair sua mensagem
-          if (typeof responseData.detail === 'object') {
-            errorMessage = JSON.stringify(responseData.detail);
-          } else {
-            errorMessage = responseData.detail;
-          }
-        }
-        
-        throw new Error(errorMessage);
-      }
-      
-      // Se a resposta for bem-sucedida, use os dados recebidos
-      if (responseData && responseData.checkout_url) {
-        console.log('Redirecionando para:', responseData.checkout_url);
-        // Redirecionar para o checkout do AbacatePay
-        window.location.href = responseData.checkout_url;
-      } else {
-        throw new Error('URL de checkout não encontrada na resposta');
-      }
-    } catch (error) {
-      console.error('Erro durante o processo de pagamento:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-      setError(`Erro ao processar o pagamento: ${errorMessage}`);
-      setIsLoading(false);
+    // Verificar se o usuário está logado
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('Você precisa estar logado para assinar o plano premium.');
+      setTimeout(() => onClose(), 3000);
+      return;
     }
+
+    // Obter dados do usuário do localStorage
+    const userDataStr = localStorage.getItem('user');
+    if (!userDataStr) {
+      setError('Você precisa estar logado para assinar o plano premium.');
+      setTimeout(() => onClose(), 3000);
+      return;
+    }
+    
+    // Mostrar o formulário de pagamento
+    setShowPaymentForm(true);
   };
+
+  const handlePaymentSuccess = (checkoutUrl: string) => {
+    // Redirecionamos para o checkout do AbacatePay
+    window.location.href = checkoutUrl;
+  };
+
+  const handlePaymentError = (errorMessage: string) => {
+    setError(errorMessage);
+    setIsLoading(false);
+  };
+
+  if (showPaymentForm) {
+    return (
+      <div className="auth-modal-overlay" onClick={onClose}>
+        <div onClick={e => e.stopPropagation()} className="payment-form-container">
+          <PaymentForm 
+            onClose={() => setShowPaymentForm(false)} 
+            onSuccess={handlePaymentSuccess}
+            onError={handlePaymentError}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-modal-overlay" onClick={onClose}>

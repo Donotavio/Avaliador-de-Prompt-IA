@@ -1,6 +1,6 @@
 // Definir URL da API com base no ambiente
-const API_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://avaliadorprompt.com.br/api'  // URL de produção
+export const API_BASE_URL = process.env.NODE_ENV === 'production'
+  ? 'https://avaliadorprompt.com/api'  // URL de produção
   : 'http://localhost:8000/api';          // URL de desenvolvimento
 
 // Armazenamento do token CSRF
@@ -14,6 +14,12 @@ export const setCsrfToken = (token: string) => {
 // Função para obter token CSRF do servidor
 export const fetchCsrfToken = async (): Promise<string> => {
   try {
+    // Verificar se estamos em desenvolvimento e retornar um token fictício
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Ambiente de desenvolvimento: usando token CSRF fictício');
+      return 'desenvolvimento-csrf-token';
+    }
+    
     const response = await fetch(`${API_BASE_URL}/auth/csrf-token`, {
       method: 'GET',
       credentials: 'include', // Importante para incluir cookies
@@ -35,6 +41,11 @@ export const fetchCsrfToken = async (): Promise<string> => {
     return data.csrf_token; // Retornar o valor diretamente
   } catch (error) {
     console.error('Erro ao obter token CSRF:', error);
+    // Em desenvolvimento, retornar um token fictício em caso de erro
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Usando token CSRF fictício após erro');
+      return 'desenvolvimento-csrf-token-fallback';
+    }
     throw error;
   }
 };
@@ -63,8 +74,9 @@ export type PlanType = 'free' | 'premium';
 export interface PromptRequest {
   content: string;
   context?: string;
-  target_model: string;
+  target_llm: string;
   plan_type: PlanType;
+  user_id?: string;
 }
 
 export interface PromptEvaluation {
@@ -93,14 +105,43 @@ export const evaluatePrompt = async (
       }
     }
 
+    // Garantir que temos os campos necessários
+    const payload = {
+      ...promptData,
+      // Garantir que target_llm existe (o backend espera isso)
+      target_llm: promptData.target_llm || 'gpt-4',
+      // Garantir que user_id existe (o backend exige isso)
+      user_id: promptData.user_id || 'anon',
+      // Remover campos undefined/null
+      context: promptData.context || undefined
+    };
+
+    console.log('Enviando payload para API:', payload);
+
     const response = await fetch(`${API_BASE_URL}/prompts/evaluate`, {
       method: 'POST',
       credentials: 'include', // Importante para incluir cookies
       headers: getHeaders(),
-      body: JSON.stringify(promptData),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
+      if (response.status === 404) {
+        console.log('Endpoint /prompts/evaluate não encontrado, tentando /evaluate');
+        // Tentar endpoint alternativo
+        const fallbackResponse = await fetch(`${API_BASE_URL}/evaluate`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: getHeaders(),
+          body: JSON.stringify(payload),
+        });
+        
+        if (!fallbackResponse.ok) {
+          throw new Error(`Erro na API: ${fallbackResponse.statusText}`);
+        }
+        
+        return await fallbackResponse.json();
+      }
       throw new Error(`Erro na API: ${response.statusText}`);
     }
 

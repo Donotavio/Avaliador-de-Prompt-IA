@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import PremiumModal from './PremiumModal';
 import EvaluationResult from './EvaluationResult';
 import ThinkingAnimation from './ThinkingAnimation';
-import { fetchCsrfToken } from '../services/api';
+import { fetchCsrfToken, API_BASE_URL } from '../services/api';
+import { evaluatePrompt } from '../services/api';
 
 // Ícones SVG inline
 const SparkleIcon = () => (
@@ -52,13 +53,7 @@ interface PromptEvaluation {
     effectiveness?: number;
     average?: number;
   };
-  detailed_analysis?: {
-    central_objective?: string;
-    strengths_weaknesses?: string;
-    context?: string;
-    practical_suggestions?: string;
-    ethical_practices?: string;
-  };
+  detailed_analysis?: any; // Usando any para compatibilidade
 }
 
 const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, openPremiumModal }) => {
@@ -91,7 +86,7 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
           return;
         }
         
-        const response = await fetch('/api/users/me', {
+        const response = await fetch(`${API_BASE_URL}/users/me`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -120,11 +115,32 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
   const checkFreeStatus = async () => {
     try {
       const token = localStorage.getItem('token');
-      const actualUserId = userId || 'anon';
+      const userStorage = localStorage.getItem('user');
+      
+      // Obter o ID do usuário do localStorage se disponível, senão usar o props
+      let actualUserId = userId;
+      
+      if (userStorage) {
+        try {
+          const userObj = JSON.parse(userStorage);
+          if (userObj && userObj.id) {
+            actualUserId = userObj.id;
+            console.log('Usando ID do usuário do localStorage:', actualUserId);
+          }
+        } catch (e) {
+          console.error('Erro ao parsear dados do usuário do localStorage:', e);
+        }
+      }
+      
+      // Se ainda for anon, usar userId das props ou 'anon'
+      if (!actualUserId || actualUserId === 'anon') {
+        actualUserId = userId || 'anon';
+      }
       
       console.log('Verificando status free para usuário:', actualUserId);
       
-      const response = await fetch(`/free/status/${actualUserId}`, {
+      // Garantir que estamos usando a URL base da API completa
+      const response = await fetch(`${API_BASE_URL}/free/status/${actualUserId}`, {
         headers: token ? {
           'Authorization': `Bearer ${token}`
         } : {}
@@ -139,8 +155,11 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
       const data = await response.json();
       console.log('Resposta da API /free/status:', data);
       
-      // O backend retorna can_use_free: false quando o limite diário foi atingido
-      if (data.can_use_free === false) {
+      // O backend pode retornar can_use_free ou status, verificamos ambos
+      const canUseFree = data.can_use_free !== undefined ? data.can_use_free : data.status;
+      
+      // O backend retorna false quando o limite diário foi atingido
+      if (canUseFree === false) {
         console.log('Limite diário atingido, não pode mais usar plano gratuito');
         setEvaluationCount(maxFreeEvaluations); // Usuário já usou todas as avaliações
         setError('Limite diário de avaliações gratuitas atingido');
@@ -202,49 +221,61 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
         headers['Authorization'] = `Bearer ${token}`;
       }
       
+      // Garantir que temos um token CSRF antes de continuar
+      let csrfToken;
       try {
-        const csrfToken = await fetchCsrfToken();
-        headers['X-CSRF-Token'] = csrfToken;
+        csrfToken = await fetchCsrfToken();
+        if (csrfToken) {
+          headers['X-CSRF-Token'] = csrfToken;
+          console.log("Token CSRF obtido com sucesso:", csrfToken);
+        } else {
+          throw new Error("Token CSRF não retornado pela API");
+        }
       } catch (error) {
-        console.warn('Não foi possível obter token CSRF. Tentando continuar sem ele.');
+        console.error('Erro ao obter token CSRF:', error);
+        showMessage('Erro de segurança: Não foi possível obter token CSRF', 'error');
+        setIsEvaluating(false);
+        return;
       }
       
-      const response = await fetch('/evaluate', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          content: prompt,
-          context: context || undefined,
-          plan_type: isPremium ? "premium" : "free",  // Use plano premium se usuário tiver acesso
-          user_id: actualUserId,
-          target_llm: model,
-        }),
+      // Log para debug
+      console.log('Iniciando avaliação com dados:', {
+        content: prompt,
+        context,
+        plan_type: isPremium ? "premium" : "free",
+        user_id: actualUserId,
+        target_llm: model,
       });
-
-      const data = await response.json();
+      
+      // Usar a função do serviço API para avaliação
+      const data = await evaluatePrompt({
+        content: prompt,
+        context: context || undefined,
+        plan_type: isPremium ? "premium" : "free",
+        target_llm: model,
+        user_id: actualUserId
+      });
       
       console.log('Resposta API completa:', data);
 
-      if (!response.ok) {
-        if (data.detail && data.detail.includes("temporariamente indisponível")) {
-          throw new Error("O serviço gratuito está temporariamente indisponível. Por favor, tente novamente mais tarde ou considere usar o plano premium.");
-        }
-        throw new Error(data.detail || 'Erro ao avaliar o prompt');
-      }
-
       if (data && data.evaluation) {
         console.log('Scores recebidos:', data.evaluation.clarity_score, data.evaluation.context_score, data.evaluation.effectiveness_score);
-        console.log('Análise detalhada recebida:', data.evaluation.detailed_analysis);
+        
+        // Verificar se há campos adicionais na resposta
+        const hasDetailedAnalysis = 'detailed_analysis' in data.evaluation;
+        if (hasDetailedAnalysis) {
+          console.log('Análise detalhada recebida:', (data.evaluation as any).detailed_analysis);
+        }
 
         // Se a análise detalhada for uma string, tentamos convertê-la para objeto
-        if (typeof data.evaluation.detailed_analysis === 'string') {
+        if (typeof (data.evaluation as any).detailed_analysis === 'string') {
           try {
-            data.evaluation.detailed_analysis = JSON.parse(data.evaluation.detailed_analysis);
+            (data.evaluation as any).detailed_analysis = JSON.parse((data.evaluation as any).detailed_analysis);
           } catch (e) {
             console.error('Erro ao parsear detailed_analysis:', e);
             // Se falhar, criamos um objeto com a string na propriedade central_objective
-            data.evaluation.detailed_analysis = {
-              central_objective: data.evaluation.detailed_analysis
+            (data.evaluation as any).detailed_analysis = {
+              central_objective: (data.evaluation as any).detailed_analysis
             };
           }
         }
@@ -286,7 +317,6 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
   const handleOpenPremiumModal = () => {
     setIsModalOpen(true);
   };
-
   return (
     <div className="prompt-form-container">
       <div className="prompt-form">

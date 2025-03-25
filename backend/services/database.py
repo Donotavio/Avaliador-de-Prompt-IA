@@ -1,8 +1,8 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
-import os
 from sqlalchemy import text
 import sys
 import logging
@@ -12,43 +12,45 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.sql_security import safe_execute
 
-# Carrega variáveis de ambiente
+# Carregar variáveis de ambiente do arquivo .env
 load_dotenv()
 
-# Configuração do banco de dados
-DATABASE_URL = os.getenv("DATABASE_URL")
-USER_DATABASE = os.getenv("USER_DATABASE")
-DATABASE = os.getenv("DATABASE")
-DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD")
+# Obter a URL da base de dados - verificando se é uma URL completa ou se precisamos construí-la
+raw_database_url = os.getenv("DATABASE_URL")
+database_user = os.getenv("USER_DATABASE")
+database_password = os.getenv("DATABASE_PASSWORD")
+database_name = os.getenv("DATABASE")
 
-# Cria string de conexão MySQL
-SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{USER_DATABASE}:{DATABASE_PASSWORD}@{DATABASE_URL}/{DATABASE}"
+# Construir URL completa para o MySQL
+if raw_database_url and ("mysql://" in raw_database_url or "mysql+pymysql://" in raw_database_url):
+    # Já é uma URL completa
+    database_url = raw_database_url
+else:
+    # Construir a partir dos componentes
+    host = "srv1783.hstgr.io" if not raw_database_url else raw_database_url
+    database_url = f"mysql+pymysql://{database_user}:{database_password}@{host}:3306/{database_name}"
 
-# Parâmetros de conexão para MySQL remoto
-connect_args = {
-    "connect_timeout": 30,  # 30 segundos de timeout para conexão
-    "read_timeout": 30,     # 30 segundos de timeout para leitura
-    "write_timeout": 30,    # 30 segundos de timeout para escrita
-}
+# Log para debug
+print(f"DATABASE_URL final: {database_url}")
 
-# Cria engine do SQLAlchemy com configurações robustas para conexão remota
+# Para compatibilidade com código existente
+SQLALCHEMY_DATABASE_URL = database_url
+
+# Criar engine
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args=connect_args,
-    pool_size=10,              # Tamanho máximo do pool de conexões
-    max_overflow=20,           # Conexões adicionais permitidas além do pool_size
-    pool_timeout=30,           # Timeout em segundos para obter uma conexão do pool
-    pool_recycle=1800,         # Recicla conexões após 30 minutos (evita o erro "MySQL server has gone away")
-    pool_pre_ping=True         # Verifica se a conexão ainda está ativa antes de usar
+    database_url,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+    connect_args={"charset": "utf8mb4"}
 )
 
-# Cria sessão
+# Criar sessão
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base para modelos declarativos
+# Base para modelos
 Base = declarative_base()
 
-# Dependency para obter a sessão do banco
+# Função para obter uma sessão do banco de dados
 def get_db():
     db = SessionLocal()
     try:

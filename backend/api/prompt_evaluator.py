@@ -7,9 +7,9 @@ de prompts de IA.
 
 from fastapi import APIRouter, HTTPException
 from core.evaluator import PromptEvaluator
-from schemas.prompt_schema import PromptRequest, PromptResponse
+from schemas.prompt_schema import PromptRequest, PromptResponse, PromptEvaluation
 
-router = APIRouter(prefix="/api/v1/prompts", tags=["prompts"])
+router = APIRouter(prefix="/prompts", tags=["prompts"])
 evaluator = PromptEvaluator()
 
 
@@ -28,6 +28,10 @@ async def evaluate_prompt(prompt: PromptRequest) -> PromptResponse:
         HTTPException: Se houver erro na avaliação do prompt.
     """
     try:
+        # Compatibilidade com frontend - target_model -> target_llm
+        if hasattr(prompt, 'target_model') and not hasattr(prompt, 'target_llm'):
+            prompt.target_llm = prompt.target_model
+        
         evaluation = await evaluator.evaluate(prompt)
         return PromptResponse(original_prompt=prompt, evaluation=evaluation)
     except Exception as e:

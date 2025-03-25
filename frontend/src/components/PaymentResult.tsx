@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { API_BASE_URL } from '../services/api';
 
 interface PaymentResultProps {
   checkoutUrl: string;
@@ -34,9 +36,10 @@ const PaymentResult: React.FC<PaymentResultProps> = ({ checkoutUrl, paymentMetho
     try {
       const paymentId = extractPaymentIdFromUrl(checkoutUrl);
       
-      const response = await fetch(`/api/payments/status/${paymentId}`, {
+      const response = await fetch(`${API_BASE_URL}/payments/status/${paymentId}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
         }
       });
       
@@ -64,9 +67,10 @@ const PaymentResult: React.FC<PaymentResultProps> = ({ checkoutUrl, paymentMetho
     try {
       const paymentId = extractPaymentIdFromUrl(checkoutUrl);
       
-      const response = await fetch(`/api/payments/details/${paymentId}`, {
+      const response = await fetch(`${API_BASE_URL}/payments/details/${paymentId}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
         }
       });
       

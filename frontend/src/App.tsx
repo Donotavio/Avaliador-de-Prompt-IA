@@ -5,6 +5,7 @@ import PremiumModal from './components/PremiumModal';
 import PaymentSuccessPage from './components/PaymentSuccessPage';
 import { UserIcon, LogoutIcon, LoginIcon } from './components/Icons';
 import PasswordField from './components/PasswordField';
+import { API_BASE_URL } from './services/api';
 
 // Ícone de prompt para o logo
 const PromptIcon = () => (
@@ -106,7 +107,7 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/forgot-password', {
+      const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -139,7 +140,7 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
     try {
       if (isLogin) {
         // Login
-        const response = await fetch('/api/auth/login', {
+        const response = await fetch(`${API_BASE_URL}/auth/login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -180,13 +181,15 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
         }
 
         // Registrar
-        const registerResponse = await fetch('/api/auth/register', {
+        const registerResponse = await fetch(`${API_BASE_URL}/auth/register`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({
             email: formData.email,
-            full_name: formData.full_name,
-            password: formData.password
+            password: formData.password,
+            full_name: formData.full_name
           }),
         });
 
@@ -217,9 +220,11 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
         }
 
         // Login automático após registro
-        const loginResponse = await fetch('/api/auth/login', {
+        const loginResponse = await fetch(`${API_BASE_URL}/auth/login`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
           body: new URLSearchParams({
             'username': formData.email,
             'password': formData.password,
@@ -441,7 +446,7 @@ const ResetPasswordPage: React.FC = () => {
     }
 
     try {
-      const response = await fetch('/api/auth/reset-password', {
+      const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -544,11 +549,9 @@ const App: React.FC = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
       
-      const response = await fetch('/api/payments/status', {
-        method: 'GET',
+      const response = await fetch(`${API_BASE_URL}/payments/status`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Authorization': `Bearer ${token}`
         }
       });
       

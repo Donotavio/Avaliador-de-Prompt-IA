@@ -39,7 +39,8 @@ passlib==1.7.4
 pathspec==0.12.1
 platformdirs==4.3.6
 pluggy==1.5.0
--e git+ssh://git@github.com/Donotavio/Avaliador-de-Prompt-IA.git@93b0f292345925f28e29dd4882b93a010c18f5f0#egg=prompt_evaluator&subdirectory=backend
+# Remova esta linha para evitar problemas de autenticação com repositório privado
+# -e git+https://github.com/Donotavio/Avaliador-de-Prompt-IA.git@93b0f292345925f28e29dd4882b93a010c18f5f0#egg=prompt_evaluator&subdirectory=backend
 protobuf==5.29.3
 py4j==0.10.9.7
 pyarrow==19.0.1
@@ -67,3 +68,11 @@ typing_extensions==4.12.2
 tzdata==2025.1
 urllib3==2.3.0
 uvicorn==0.24.0
+
+# Banco de dados
+pymysql>=1.0.2
+
+# Dependências para sanitização de HTML em emails
+bleach
+tinycss2
+email-validator

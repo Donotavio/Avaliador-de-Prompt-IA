@@ -214,7 +214,23 @@ const EvaluationResult: React.FC<EvaluationResultProps> = ({ result }) => {
       )}
 
       {result.detailed_analysis && (
-        <DetailedAnalysis analysisData={result.detailed_analysis} />
+        <DetailedAnalysis 
+          analysisData={
+            typeof result.detailed_analysis === 'string' 
+              ? (() => {
+                  try {
+                    return JSON.parse(result.detailed_analysis);
+                  } catch (e) {
+                    console.error('Erro ao analisar detailed_analysis:', e);
+                    // Fallback para quando não é um JSON válido
+                    return {
+                      central_objective: result.detailed_analysis
+                    };
+                  }
+                })()
+              : result.detailed_analysis
+          } 
+        />
       )}
     </div>
   );

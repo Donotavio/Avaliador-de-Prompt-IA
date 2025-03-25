@@ -171,7 +171,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         safe_methods = {"GET", "HEAD", "OPTIONS"}
         
         # Rotas que estão isentas de verificação CSRF
-        exempt_paths = {"/api/auth/login", "/api/auth/register", "/api/auth/forgot-password", "/evaluate"}
+        exempt_paths = {"/api/auth/login", "/api/auth/register", "/api/auth/forgot-password", "/evaluate", "/api/prompts/evaluate", "/api/payments/create"}
         
         # Verifica se é necessário verificar o token CSRF
         if request.method not in safe_methods and request.url.path not in exempt_paths:

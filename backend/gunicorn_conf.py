@@ -1,5 +1,6 @@
 """Gunicorn configuration for production deployment."""
 import multiprocessing
+import os
 
 # Workers
 workers = multiprocessing.cpu_count() * 2 + 1
@@ -10,8 +11,11 @@ bind = "unix:/tmp/avaliador-api.sock"  # Using socket instead of port for nginx
 
 # Logging
 loglevel = "info"
-accesslog = "/var/log/gunicorn/access.log"
-errorlog = "/var/log/gunicorn/error.log"
+# Ensure log directory exists
+log_dir = "/var/log/avaliador-api"
+os.makedirs(log_dir, exist_ok=True)
+accesslog = f"{log_dir}/access.log"
+errorlog = f"{log_dir}/error.log"
 
 # Process naming
 proc_name = "avaliador_prompt_api"

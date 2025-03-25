@@ -1,0 +1,27 @@
+# Project Coding Standards and Guidelines
+
+1. Our backend is developed in Python.
+2. Our frontend is built using React.
+3. All code must follow software engineering best practices.
+4. Avoid any redundancy in function logic or naming across modules.
+5. Never include inline comments in code. Use descriptive function and variable names instead.
+6. Follow PEP-8 for Python code styling.
+7. All Python functions must include Google-style docstrings.
+8. Use modular, reusable, and testable code structures.
+9. Prioritize maintainability, performance, and scalability in every component.
+10. Use black and isort for automatic code formatting and import sorting.
+11. All Python code must be tested using pytest.
+12. All business logic should be separated from controllers and view layers.
+13. Never modify files in the `/core/utils` directory unless explicitly approved by maintainers.
+14. Do not use deprecated or unstable APIs.
+15. React code must be structured using functional components and hooks only.
+16. Use TypeScript for all React components.
+17. Use TailwindCSS for UI styling in React.
+18. All components must be fully accessible (WCAG 2.1 compliant).
+19. Avoid any global state unless using a defined state management strategy (e.g., Zustand or Redux Toolkit).
+20. All new features must include appropriate unit and integration tests.
+21. Always validate prompt inputs and model outputs against business rules.
+22. No code should go to production without peer review and approval.
+23. The system is deployed on Hostinger and must remain fully operational at all times.
+24. Never modify code directly on the server to ensure the deployed version mirrors the local repository.
+25. You are allowed to run commands directly in the terminal for deployment and maintenance purposes.

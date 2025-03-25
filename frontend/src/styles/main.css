@@ -684,35 +684,169 @@
   line-height: 1.5;
 }
 
+/* Estilos para a análise detalhada */
 .detailed-analysis {
-  background-color: var(--neutral-50);
-  padding: var(--space-4);
-  border-radius: var(--radius-md);
+  margin-top: 2.5rem;
+  padding: 2rem;
+  background-color: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
 }
 
-.detailed-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--neutral-900);
-  margin-bottom: var(--space-4);
+.detailed-analysis .detailed-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--primary-800);
+  margin-bottom: 2rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid var(--primary-100);
+  text-align: center;
 }
 
-.analysis-section {
-  margin-bottom: var(--space-4);
+.detailed-analysis .analysis-section {
+  margin-bottom: 2.5rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid var(--neutral-200);
 }
 
-.section-title {
-  font-size: 1rem;
+.detailed-analysis .analysis-section:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.detailed-analysis .section-title {
+  font-size: 1.4rem;
   font-weight: 600;
   color: var(--neutral-800);
-  margin-bottom: var(--space-2);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.section-content {
-  font-size: 0.875rem;
+.detailed-analysis .section-title::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background-color: var(--primary-600);
+  border-radius: 50%;
+}
+
+/* Estilo especial para o objetivo central */
+.detailed-analysis [data-section-type="central_objective"] .section-content {
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: var(--neutral-800);
+  background-color: var(--primary-50);
+  padding: 1.25rem;
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--primary-500);
+  font-weight: 500;
+  font-style: italic;
+}
+
+/* Estilos base para conteúdo e listas */
+.detailed-analysis .section-content {
+  font-size: 1rem;
   line-height: 1.6;
   color: var(--neutral-700);
   white-space: pre-line;
+}
+
+.detailed-analysis .section-list {
+  margin: 0.5rem 0 0.5rem 1.5rem;
+  padding-left: 1rem;
+}
+
+.detailed-analysis .section-list li {
+  margin-bottom: 0.75rem;
+  line-height: 1.6;
+  color: var(--neutral-700);
+  padding-left: 0.5rem;
+}
+
+.detailed-analysis .section-list li:last-child {
+  margin-bottom: 0;
+}
+
+/* Estilos para Pontos Fortes e Fracos */
+.strengths-weaknesses {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.strength-section, .weakness-section {
+  padding: 1rem;
+  border-radius: var(--radius-md);
+}
+
+.strength-section {
+  background-color: rgba(16, 185, 129, 0.1);
+  border-left: 3px solid var(--success);
+}
+
+.weakness-section {
+  background-color: rgba(239, 68, 68, 0.05);
+  border-left: 3px solid var(--warning);
+}
+
+.sw-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--neutral-800);
+}
+
+.sw-content {
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* Estilos para Sugestões Práticas */
+.detailed-analysis [data-section-type="practical_suggestions"] .section-list {
+  counter-reset: suggestion-counter;
+  list-style-type: none;
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.detailed-analysis [data-section-type="practical_suggestions"] .section-list li {
+  position: relative;
+  counter-increment: suggestion-counter;
+  padding: 1rem 1rem 1rem 3rem;
+  margin-bottom: 1.25rem;
+  background-color: var(--neutral-50);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--primary-500);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  line-height: 1.6;
+}
+
+.detailed-analysis [data-section-type="practical_suggestions"] .section-list li:hover {
+  transform: translateX(5px);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+}
+
+.detailed-analysis [data-section-type="practical_suggestions"] .section-list li::before {
+  content: counter(suggestion-counter);
+  position: absolute;
+  left: 1rem;
+  top: 1rem;
+  color: white;
+  font-weight: 600;
+  background-color: var(--primary-600);
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Formulário de avaliação */
@@ -890,10 +1024,11 @@
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.6);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 100;
   padding: var(--space-4);
+  overflow-y: auto;
 }
 
 .auth-modal-container {
@@ -1506,4 +1641,26 @@ x-close-button {
   margin: var(--space-4) 0;
   font-size: 0.875rem;
   border-radius: var(--radius-md);
+}
+
+/* Estilos para modal com scroll */
+.payment-form-container {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  margin: var(--space-4) 0;
+}
+
+.payment-form {
+  max-height: 90vh;
+  overflow-y: auto;
+  width: 100%;
+}
+
+.payment-form .modal-content {
+  max-height: none;
+  overflow-y: visible;
+  padding-bottom: var(--space-8);
 } 

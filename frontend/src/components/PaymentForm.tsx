@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AlertIcon } from './Icons';
+import { API_BASE_URL } from '../services/api';
 
 interface PaymentFormProps {
   onClose: () => void;
@@ -48,18 +49,15 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, onError }
     postalCode: '',
     paymentMethod: 'PIX' // Valor padrão
   });
-  
-  const paymentMethods = [
-    { id: 'PIX', name: 'PIX' }
-  ];
 
   // Buscar produtos ativos quando o componente carregar
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await fetch('/api/products?active_only=true', {
+        const response = await fetch(`${API_BASE_URL}/products?active_only=true`, {
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Content-Type': 'application/json'
           }
         });
 
@@ -103,9 +101,11 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, onError }
         }
         
         setIsLoadingUserData(true);
-        const response = await fetch('/api/users/me/payment-info', {
+        const response = await fetch(`${API_BASE_URL}/users/me/payment-info`, {
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
           }
         });
         
@@ -266,7 +266,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, onError }
     };
     
     // Enviar para o endpoint de proxy que não vai modificar as URLs
-    const response = await fetch('/api/payments/proxy', {
+    const response = await fetch(`${API_BASE_URL}/payments/proxy`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -387,7 +387,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, onError }
       // Tenta primeiro o caminho padrão do backend
       let response;
       try {
-        response = await fetch('/api/payments/create', {
+        response = await fetch(`${API_BASE_URL}/payments/create`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

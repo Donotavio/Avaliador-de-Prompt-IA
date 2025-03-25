@@ -8,14 +8,11 @@ principais e middleware necessários.
 # Importa o patch para OpenAI antes de qualquer outra coisa
 import services.openai_patch as openai_patch
 
-from fastapi import FastAPI, HTTPException, Request, Depends, Body
+from fastapi import FastAPI, HTTPException, Request, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
 from api.prompt_evaluator import router as prompt_router
 from core.evaluator import PromptEvaluator
 from schemas.prompt_schema import (
-    PromptBase,
-    PromptEvaluation,
-    PlanType,
     PromptRequest,
     PromptResponse,
 )
@@ -33,12 +30,11 @@ from typing import Optional
 from fastapi.security import OAuth2PasswordBearer
 import uvicorn
 import os
-import logging
-from datetime import datetime
+import secrets
 
 from services.token_security import initialize_jwt_keys
 # Importação para proteção CSRF
-from services.csrf_protection import CSRFProtectionMiddleware
+from services.csrf_protection import CSRFProtectionMiddleware, generate_csrf_token, set_csrf_token
 
 # Constantes para configuração da API
 API_PREFIX = "/api"
@@ -47,8 +43,14 @@ ALLOWED_HOSTS = [
     "https://avaliadorprompt.com.br",  # Domínio principal em produção
     "https://www.avaliadorprompt.com.br",  # Subdomínio www em produção
     "http://localhost:3000",  # Ambiente de desenvolvimento local frontend
-    "http://localhost:5000"   # Ambiente de teste local
+    "http://localhost:5000",   # Ambiente de teste local
+    "http://localhost:8000"    # Ambiente de desenvolvimento local API
 ]
+
+# Permitir todos os hosts em desenvolvimento
+if os.getenv("ENV") != "production":
+    # Em desenvolvimento, permitimos todas as origens para facilitar testes
+    ALLOWED_HOSTS = ["*"]
 
 # Cria tabelas no banco de dados (se não existirem)
 # Nota: Para migrações complexas, use o Alembic: 
@@ -106,12 +108,15 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_HOSTS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],  # Métodos específicos permitidos
-    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],  # Cabeçalhos específicos permitidos
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Incluindo OPTIONS para pre-flight requests
+    allow_headers=["*"],  # Permite todos os cabeçalhos em desenvolvimento
 )
 
 # Adiciona middleware de proteção CSRF
-app.add_middleware(CSRFProtectionMiddleware)
+if os.getenv("ENV") == "production":
+    app.add_middleware(CSRFProtectionMiddleware)
+else:
+    logger.warning("Proteção CSRF desabilitada em ambiente de desenvolvimento")
 
 # Inclui rotas com prefixo API
 app.include_router(auth.router, prefix=API_PREFIX)
@@ -124,6 +129,27 @@ app.include_router(prompt_router, prefix=API_PREFIX)
 
 # Inicializa o avaliador
 evaluator = PromptEvaluator()
+
+# Adiciona endpoint para obter token CSRF
+@app.get(f"{API_PREFIX}/csrf-token")
+async def get_csrf_token(response: Response, request: Request):
+    """
+    Gera um novo token CSRF acessível por rota pública.
+    """
+    # Usa um ID temporário para usuários não autenticados
+    user_id = f"temp_{secrets.token_hex(8)}"
+    
+    # Gera um novo token CSRF
+    csrf_token = generate_csrf_token(user_id)
+    
+    # Define o token no cookie
+    set_csrf_token(response, csrf_token)
+    
+    # Log para depuração
+    logger.info(f"Token CSRF gerado: {csrf_token}")
+    
+    # Retorna o token na resposta
+    return {"csrf_token": csrf_token}
 
 # OAuth2 schema opcional que não levanta exceção se não houver token
 oauth2_scheme_optional = OAuth2PasswordBearer(
@@ -147,12 +173,26 @@ def get_current_user_optional(
     except:
         return None
 
+# Cria rotas espelho da API para manter compatibilidade
+@app.get(f"{API_PREFIX}/free/status/{{user_id}}")
+async def api_check_free_status(
+    user_id: str,
+    request: Request,
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """
+    Versão da API da função check_free_status.
+    Mantida para compatibilidade com o frontend.
+    """
+    logger.info(f"API prefix endpoint acessado para verificação de status gratuito")
+    # Garantir que esta função espelhe exatamente a lógica de check_free_status
+    return await check_free_status(user_id, request, current_user)
+
 @app.get("/")
 async def root():
     """Endpoint raiz para verificar se a API está funcionando."""
     logger.info("Endpoint raiz acessado")
     return {"message": "API de Avaliação de Prompts"}
-
 
 @app.post("/evaluate", response_model=PromptResponse)
 async def evaluate_prompt(request: PromptRequest):
@@ -167,6 +207,7 @@ async def evaluate_prompt(request: PromptRequest):
     """
     try:
         logger.info(f"Iniciando avaliação de prompt - Plano: {request.plan_type}")
+        logger.debug(f"Dados da requisição: {request.dict()}")
 
         # Valida o prompt
         if len(request.content.strip()) < 10:
@@ -174,10 +215,22 @@ async def evaluate_prompt(request: PromptRequest):
             raise HTTPException(
                 status_code=400, detail="O prompt deve ter pelo menos 10 caracteres"
             )
+            
+        # Compatibilidade com frontend - target_model -> target_llm
+        if hasattr(request, 'target_model') and not hasattr(request, 'target_llm'):
+            request.target_llm = request.target_model
+            logger.debug(f"Convertido target_model para target_llm: {request.target_llm}")
 
         # Avalia o prompt
-        evaluation = await evaluator.evaluate(request)
-        logger.info("Avaliação concluída com sucesso")
+        try:
+            evaluation = await evaluator.evaluate(request)
+            logger.info("Avaliação concluída com sucesso")
+        except Exception as eval_error:
+            logger.error(f"Erro na avaliação: {str(eval_error)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Erro ao processar avaliação: {str(eval_error)}"
+            )
 
         # Log do resultado para debug
         response = PromptResponse(
@@ -279,61 +332,35 @@ async def check_free_status(
     Returns:
         dict: Status do plano gratuito
     """
-    # Para usuários anônimos, permitir apenas verificar 'anon'
-    if user_id == "anon":
+    # Se o usuário está autenticado, usar seu ID real
+    if current_user:
+        user_id_to_check = current_user.id
+        logger.info(f"Usuário autenticado: {user_id_to_check}, verificando status gratuito")
+    # Para usuários anônimos ou se for explicitamente solicitado o status anônimo
+    elif user_id == "anon":
         # Para usuários anônimos, verificamos pelo IP
         client_ip = request.client.host
-        anon_id = f"anon_{client_ip}"
-        logger.info(f"Verificando status gratuito para usuário anônimo: {anon_id}")
-        
-        can_use_free, message = usage_manager.can_use_free(anon_id)
-        logger.info(f"Status gratuito anônimo: {can_use_free}, Mensagem: {message}")
-        
-        # Se for o primeiro uso, retornar sempre true
-        if not can_use_free and "já utilizou" in message:
-            message = "Primeira avaliação gratuita"
-            can_use_free = True
-            
-        return {"can_use_free": can_use_free, "message": message}
+        user_id_to_check = f"anon_{client_ip}"
+        logger.info(f"Verificando status gratuito para usuário anônimo: {user_id_to_check}")
+    else:
+        # Se não for anônimo nem autenticado, usar o ID fornecido
+        user_id_to_check = user_id
+        logger.info(f"Verificando status gratuito para usuário específico: {user_id_to_check}")
     
-    # Para usuários autenticados, verificar permissões
-    if not current_user:
-        raise HTTPException(
-            status_code=401,
-            detail="Autenticação necessária para verificar status de usuário específico"
-        )
+    # Verificar se o usuário pode usar o plano gratuito
+    can_use_free, message = usage_manager.can_use_free(user_id_to_check)
+    logger.info(f"Status gratuito para {user_id_to_check}: {can_use_free}, Mensagem: {message}")
+    
+    # Se for usuário anônimo e for o primeiro uso, retornar sempre true
+    if user_id_to_check.startswith("anon_") and not can_use_free and "já utilizou" in message:
+        message = "Primeira avaliação gratuita"
+        can_use_free = True
         
-    # Garantir que o usuário só pode verificar seu próprio status (ou é admin)
-    if current_user.id != user_id and not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, 
-            detail="Você só pode verificar seu próprio status"
-        )
-        
-    try:
-        logger.info(f"Verificando status gratuito do usuário: {user_id}")
-        can_use_free, message = usage_manager.can_use_free(user_id)
-        logger.info(f"Status gratuito: {can_use_free}, Mensagem: {message}")
-        
-        user_usage = usage_manager.get_user_usage(user_id)
-        
-        # Se o usuário pode usar normalmente, não incluir mensagem
-        if can_use_free and not message:
-            return {
-                "status": can_use_free,
-                "evaluation_count": user_usage.free_evaluations_count,
-                "daily_limit": USAGE_LIMITS["free"]["daily_limit"]
-            }
-        
-        return {
-            "status": can_use_free, 
-            "message": message,
-            "evaluation_count": user_usage.free_evaluations_count,
-            "daily_limit": USAGE_LIMITS["free"]["daily_limit"]
-        }
-    except Exception as e:
-        logger.error(f"Erro ao verificar status gratuito: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "can_use_free": can_use_free, 
+        "status": can_use_free,  # Para compatibilidade
+        "message": message
+    }
 
 
 @app.post("/reset/{user_id}")
@@ -427,6 +454,14 @@ async def admin_reset_premium_usage(user_id: str):
     except Exception as e:
         logger.error(f"[ADMIN] Erro ao resetar uso premium: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro ao resetar uso premium: {str(e)}")
+
+@app.get(f"{API_PREFIX}/health")
+async def health_check():
+    """
+    Endpoint simples para verificar se a API está funcionando.
+    Usado para monitoramento e diagnóstico.
+    """
+    return {"status": "ok", "message": "API está funcionando corretamente"}
 
 # Initialize JWT keys at startup
 initialize_jwt_keys()

@@ -11,6 +11,7 @@ from models.subscription import Subscription
 from schemas.subscription_schema import SubscriptionCreate, Subscription as SubscriptionSchema
 from services.auth import get_current_user
 from services.abacate_pay import AbacatePayClient
+from utils.logger import logger
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -42,6 +43,10 @@ async def create_payment(
     Returns:
         Objeto com dados de confirmação do pagamento e URL de checkout
     """
+    # Logs detalhados para diagnóstico
+    logger.info(f"Recebendo solicitação de pagamento para usuário: {current_user.id}")
+    logger.info(f"Dados recebidos: {subscription_data}")
+    
     # Verifica se o usuário já tem assinatura ativa
     active_subscription = db.query(Subscription).filter(
         Subscription.user_id == current_user.id,
@@ -59,37 +64,71 @@ async def create_payment(
         # Extrair dados do corpo da requisição
         product_id = subscription_data.get("product_id")
         user_data = subscription_data.get("user_data", {})
-        payment_method = subscription_data.get("payment_method", "PIX")
+        payment_method = subscription_data.get("payment_method")
         
-        # Validar método de pagamento
+        # Validação dos campos obrigatórios
+        missing_fields = []
+        if not product_id:
+            missing_fields.append("product_id")
+        if not payment_method:
+            missing_fields.append("payment_method")
+        
+        if missing_fields:
+            error_msg = f"Campos obrigatórios ausentes: {', '.join(missing_fields)}"
+            logger.error(error_msg)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg
+            )
+        
+        logger.info(f"Produto solicitado: {product_id}")
+        logger.info(f"Método de pagamento: {payment_method}")
+        
+        # Verificar se o método de pagamento é válido e o converte para o formato esperado
+        payment_method = payment_method.upper()
         valid_methods = ["PIX", "CREDIT_CARD", "BOLETO"]
         if payment_method not in valid_methods:
-            payment_method = "PIX"  # Padrão para fallback
+            logger.warning(f"Método de pagamento inválido: {payment_method}, usando PIX como padrão")
+            payment_method = "PIX"  # Método padrão se inválido
         
         # Se não informou produto, busca o produto premium padrão
         if not product_id:
+            logger.info("Produto não especificado, buscando produto premium padrão")
             product = db.query(Product).filter(
                 Product.external_id == "premium-plan",
                 Product.active == True
             ).first()
             
             if not product:
+                logger.error("Produto premium padrão não encontrado")
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Produto premium não encontrado"
                 )
+            logger.info(f"Produto premium padrão encontrado: {product.id} - {product.name}")
         else:
-            # Busca o produto específico
+            # Verifica primeiro pelo external_id
+            logger.info(f"Buscando produto com external_id ou id: {product_id}")
             product = db.query(Product).filter(
-                Product.id == product_id,
+                Product.external_id == product_id,
                 Product.active == True
             ).first()
             
+            # Se não encontrar pelo external_id, tenta pelo id
             if not product:
+                logger.info(f"Produto não encontrado por external_id, tentando buscar por id")
+                product = db.query(Product).filter(
+                    Product.id == product_id,
+                    Product.active == True
+                ).first()
+            
+            if not product:
+                logger.error(f"Produto não encontrado com id ou external_id: {product_id}")
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Produto não encontrado"
                 )
+            logger.info(f"Produto encontrado: {product.id} - {product.name}")
         
         # Atualiza dados adicionais do usuário se fornecidos
         updated_user = False
@@ -133,7 +172,7 @@ async def create_payment(
                 updated_user = True
             
             # Método de pagamento preferido
-            current_user.preferred_payment_method = payment_method
+            current_user.preferred_payment_method = subscription_data.get("payment_method", "PIX")
             updated_user = True
                 
             if updated_user:
@@ -151,7 +190,7 @@ async def create_payment(
         # Dados para a criação da cobrança
         payment_data = {
             "frequency": "ONE_TIME",
-            "methods": ["PIX"],  # Método de pagamento PIX é o único suportado atualmente pelo AbacatePay
+            "methods": [payment_method],  # Usa o método de pagamento fornecido
             "products": [
                 {
                     "externalId": product.external_id,
