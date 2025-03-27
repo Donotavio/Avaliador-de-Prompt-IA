@@ -85,6 +85,12 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
+  const [userId, setUserId] = useState('');
+  const [verificationToken, setVerificationToken] = useState('');
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [isResendingToken, setIsResendingToken] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const toggleMode = () => setIsLogin(!isLogin);
 
@@ -93,12 +99,20 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleVerificationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Limita a entrada a 6 caracteres numéricos
+    const { value } = e.target;
+    const numericValue = value.replace(/[^0-9]/g, '').slice(0, 6);
+    setVerificationToken(numericValue);
+  };
+
   const handleForgotPassword = () => {
     setShowForgotPassword(true);
   };
 
   const handleBackToLogin = () => {
     setShowForgotPassword(false);
+    setShowVerification(false);
   };
 
   const handleSubmitForgotPassword = async (e: React.FormEvent) => {
@@ -129,6 +143,101 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
       setError(error instanceof Error ? error.message : 'Erro ao processar solicitação');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleVerifyEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVerificationError(null);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/verify-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: verificationToken,
+          user_id: userId
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Erro ao verificar e-mail');
+      }
+
+      // Se a verificação for bem-sucedida, faça login automático
+      if (data.access_token) {
+        localStorage.setItem('token', data.access_token);
+        localStorage.setItem('refreshToken', data.refresh_token);
+        
+        // Busca os dados do usuário
+        const userResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+          headers: {
+            'Authorization': `Bearer ${data.access_token}`
+          }
+        });
+        
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          localStorage.setItem('user', JSON.stringify({
+            id: userData.id,
+            email: userData.email,
+            fullName: userData.full_name,
+            isVerified: userData.is_email_verified
+          }));
+        }
+        
+        onClose();
+        onLoginSuccess();
+      } else {
+        // Se não receber tokens, volte para login
+        setShowVerification(false);
+      }
+    } catch (error) {
+      console.error('Erro:', error);
+      setVerificationError(error instanceof Error ? error.message : 'Erro ao verificar e-mail');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (resendCooldown > 0) return;
+    
+    setIsResendingToken(true);
+    setVerificationError(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/resend-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Erro ao reenviar código');
+      }
+
+      // Inicia o contador de cooldown (60 segundos)
+      setResendCooldown(60);
+      const countdownInterval = setInterval(() => {
+        setResendCooldown(prev => {
+          if (prev <= 1) {
+            clearInterval(countdownInterval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (error) {
+      console.error('Erro:', error);
+      setVerificationError(error instanceof Error ? error.message : 'Erro ao reenviar código');
+    } finally {
+      setIsResendingToken(false);
     }
   };
 
@@ -163,7 +272,8 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
         localStorage.setItem('user', JSON.stringify({
           id: userData.user_id,
           email: userData.email,
-          fullName: userData.full_name
+          fullName: userData.full_name,
+          isVerified: userData.is_email_verified
         }));
 
         // Fechar modal e notificar sucesso
@@ -219,191 +329,231 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
           }
         }
 
-        // Login automático após registro
-        const loginResponse = await fetch(`${API_BASE_URL}/auth/login`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({
-            'username': formData.email,
-            'password': formData.password,
-          }),
-        });
-
-        if (!loginResponse.ok) {
-          const data = await loginResponse.json();
-          throw new Error(data.detail || 'Erro ao fazer login automático');
-        }
-
-        const loginData = await loginResponse.json();
+        const userData = await registerResponse.json();
         
-        // Salvar dados
-        localStorage.setItem('token', loginData.access_token);
-        localStorage.setItem('user', JSON.stringify({
-          id: loginData.user_id,
-          email: loginData.email,
-          fullName: loginData.full_name
-        }));
-
-        // Fechar modal e notificar sucesso
-        onClose();
-        onLoginSuccess();
+        // Configurar para exibir o modal de verificação
+        setUserId(userData.id);
+        setShowVerification(true);
+        setIsLoading(false);
       }
     } catch (error) {
       console.error('Erro:', error);
       setError(error instanceof Error ? error.message : 'Erro ao processar solicitação');
-    } finally {
       setIsLoading(false);
     }
   };
+
+  if (showForgotPassword) {
+    return (
+      <div className="auth-modal-overlay" onClick={onClose}>
+        <div className="auth-modal-container" onClick={e => e.stopPropagation()}>
+          <button className="auth-close-button" onClick={onClose}>×</button>
+          <div className="auth-modal-header">
+            <h2 className="auth-modal-title">Recuperar Senha</h2>
+          </div>
+          <div className="auth-modal-content">
+            <form onSubmit={handleSubmitForgotPassword}>
+              <div className="auth-form-group">
+                <label htmlFor="email">E-mail</label>
+                <input 
+                  type="email" 
+                  id="email" 
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+
+              {error && <div className="auth-error-message">{error}</div>}
+              
+              <div className="auth-form-actions recovery-actions">
+                <button
+                  type="button"
+                  className="auth-secondary-button"
+                  onClick={handleBackToLogin}
+                >
+                  Voltar
+                </button>
+                <button
+                  type="submit"
+                  className="auth-primary-button"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Enviando...' : 'Enviar link de recuperação'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (showVerification) {
+    return (
+      <div className="auth-modal-overlay" onClick={onClose}>
+        <div className="auth-modal-container" onClick={e => e.stopPropagation()}>
+          <button className="auth-close-button" onClick={onClose}>×</button>
+          <div className="auth-modal-header">
+            <h2 className="auth-modal-title">Verificação de E-mail</h2>
+          </div>
+          <div className="auth-modal-content">
+            <div className="message-container">
+              <p>Um código de verificação foi enviado para o seu e-mail.</p>
+              <p>Por favor, insira o código para verificar sua conta:</p>
+            </div>
+            
+            <form onSubmit={handleVerifyEmail}>
+              <div className="auth-form-group verification-input">
+                <label htmlFor="verificationToken">Código de verificação</label>
+                <input 
+                  type="text" 
+                  id="verificationToken" 
+                  name="verificationToken"
+                  value={verificationToken}
+                  onChange={handleVerificationChange}
+                  maxLength={6}
+                  placeholder="Insira o código de 6 dígitos"
+                  required
+                />
+              </div>
+
+              {verificationError && <div className="auth-error-message">{verificationError}</div>}
+              
+              <div className="auth-form-actions">
+                <button
+                  type="submit"
+                  className="auth-primary-button"
+                  disabled={isLoading || verificationToken.length !== 6}
+                >
+                  {isLoading ? 'Verificando...' : 'Verificar'}
+                </button>
+              </div>
+              
+              <div className="auth-toggle-mode">
+                <button 
+                  type="button" 
+                  className="auth-text-button" 
+                  onClick={handleResendVerification}
+                  disabled={isResendingToken || resendCooldown > 0}
+                >
+                  {resendCooldown > 0 
+                    ? `Reenviar código (${resendCooldown}s)` 
+                    : isResendingToken 
+                      ? 'Reenviando...' 
+                      : 'Reenviar código'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-modal-overlay" onClick={onClose}>
       <div className="auth-modal-container" onClick={e => e.stopPropagation()}>
         <button className="auth-close-button" onClick={onClose}>×</button>
         
-        {showForgotPassword ? (
-          // Formulário de recuperação de senha
-          <>
-            <div className="auth-modal-header">
-              <h2 className="auth-modal-title">Recuperar Senha</h2>
+        <div className="auth-modal-header">
+          <h2 className="auth-modal-title">{isLogin ? 'Entrar' : 'Criar Conta'}</h2>
+        </div>
+        
+        <div className="auth-modal-content">
+          {error && <div className="auth-error-message">{error}</div>}
+          
+          <form onSubmit={handleSubmit}>
+            <div className="auth-form-group">
+              <label htmlFor="email">Email*</label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                required
+              />
             </div>
-            
-            <div className="auth-modal-content">
-              {error && <div className="auth-error-message">{error}</div>}
-              
-              <form onSubmit={handleSubmitForgotPassword}>
-                <div className="auth-form-group">
-                  <label htmlFor="recovery-email">Email*</label>
-                  <input
-                    type="email"
-                    id="recovery-email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                
-                <div className="auth-form-actions recovery-actions">
-                  <button
-                    type="button"
-                    className="auth-secondary-button"
-                    onClick={handleBackToLogin}
-                  >
-                    Voltar
-                  </button>
-                  <button
-                    type="submit"
-                    className="auth-primary-button"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Enviando...' : 'Enviar link de recuperação'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </>
-        ) : (
-          // Formulário de login/registro
-          <>
-            <div className="auth-modal-header">
-              <h2 className="auth-modal-title">{isLogin ? 'Entrar' : 'Criar Conta'}</h2>
-            </div>
-            
-            <div className="auth-modal-content">
-              {error && <div className="auth-error-message">{error}</div>}
-              
-              <form onSubmit={handleSubmit}>
-                <div className="auth-form-group">
-                  <label htmlFor="email">Email*</label>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
 
-                {!isLogin && (
-                  <div className="auth-form-group">
-                    <label htmlFor="full_name">Nome Completo*</label>
-                    <input
-                      type="text"
-                      id="full_name"
-                      name="full_name"
-                      value={formData.full_name}
-                      onChange={handleChange}
-                      required
-                    />
-                  </div>
-                )}
-
-                <PasswordField
-                  id="password"
-                  name="password"
-                  value={formData.password}
+            {!isLogin && (
+              <div className="auth-form-group">
+                <label htmlFor="full_name">Nome Completo*</label>
+                <input
+                  type="text"
+                  id="full_name"
+                  name="full_name"
+                  value={formData.full_name}
                   onChange={handleChange}
                   required
-                  label="Senha"
-                  showHint={!isLogin}
                 />
+              </div>
+            )}
 
-                {!isLogin && (
-                  <PasswordField
-                    id="password_confirm"
-                    name="password_confirm"
-                    value={formData.password_confirm}
-                    onChange={handleChange}
-                    required
-                    label="Confirmar Senha"
-                  />
-                )}
+            <div className="auth-form-group">
+              <label htmlFor="password">Senha*</label>
+              <PasswordField 
+                id="password" 
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                required
+              />
+            </div>
 
-                {isLogin && (
-                  <div className="auth-forgot-password">
-                    <button 
-                      type="button" 
-                      className="auth-text-button"
-                      onClick={handleForgotPassword}
-                    >
-                      Esqueceu a senha?
-                    </button>
-                  </div>
-                )}
+            {!isLogin && (
+              <div className="auth-form-group">
+                <label htmlFor="password_confirm">Confirmar Senha*</label>
+                <PasswordField 
+                  id="password_confirm" 
+                  name="password_confirm"
+                  value={formData.password_confirm}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+            )}
 
-                <div className="auth-form-actions">
-                  <button
-                    type="submit"
-                    className="auth-submit-button"
-                    disabled={isLoading}
-                  >
-                    {isLoading
-                      ? 'Processando...'
-                      : isLogin
-                        ? 'Entrar'
-                        : 'Criar Conta'
-                    }
-                  </button>
-                </div>
-              </form>
-              
-              <div className="auth-toggle-mode">
-                <span>{isLogin ? 'Ainda não tem conta?' : 'Já tem uma conta?'}</span>
-                <button
-                  type="button"
+            {isLogin && (
+              <div className="auth-forgot-password">
+                <button 
+                  type="button" 
                   className="auth-text-button"
-                  onClick={toggleMode}
+                  onClick={handleForgotPassword}
                 >
-                  {isLogin ? 'Criar Conta' : 'Fazer Login'}
+                  Esqueceu a senha?
                 </button>
               </div>
+            )}
+
+            <div className="auth-form-actions">
+              <button
+                type="submit"
+                className="auth-submit-button"
+                disabled={isLoading}
+              >
+                {isLoading
+                  ? 'Processando...'
+                  : isLogin
+                    ? 'Entrar'
+                    : 'Criar Conta'
+                }
+              </button>
             </div>
-          </>
-        )}
+          </form>
+          
+          <div className="auth-toggle-mode">
+            <span>{isLogin ? 'Ainda não tem conta?' : 'Já tem uma conta?'}</span>
+            <button
+              type="button"
+              className="auth-text-button"
+              onClick={toggleMode}
+            >
+              {isLogin ? 'Criar Conta' : 'Fazer Login'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1417,4 +1417,103 @@ select.form-control {
 .auth-modal-content .password-toggle-button {
   height: 100%;
   padding: 0 10px;
+}
+
+/* Estilos para o modal de verificação de e-mail */
+.verification-input input {
+  font-size: 1.2rem;
+  letter-spacing: 0.1rem;
+  text-align: center;
+}
+
+.message-container {
+  background-color: #f5f9ff;
+  border-left: 4px solid #4a56e2;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  border-radius: 0.25rem;
+}
+
+.message-container p {
+  margin: 0.5rem 0;
+  color: #333;
+}
+
+.button-group {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1.5rem;
+}
+
+.text-button {
+  background: none;
+  border: none;
+  color: #4a56e2;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.5rem;
+  text-decoration: underline;
+  transition: color 0.2s ease;
+}
+
+.text-button:hover {
+  color: #3a45d1;
+}
+
+.text-button:disabled {
+  color: #a0a0a0;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.primary-button {
+  background-color: #4a56e2;
+  border: none;
+  border-radius: 0.25rem;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  transition: background-color 0.2s ease;
+}
+
+.primary-button:hover {
+  background-color: #3a45d1;
+}
+
+.primary-button:disabled {
+  background-color: #a0a0a0;
+  cursor: not-allowed;
+}
+
+.secondary-button {
+  background-color: white;
+  border: 1px solid #4a56e2;
+  border-radius: 0.25rem;
+  color: #4a56e2;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  transition: all 0.2s ease;
+}
+
+.secondary-button:hover {
+  background-color: #f0f2ff;
+}
+
+.secondary-button:disabled {
+  border-color: #a0a0a0;
+  color: #a0a0a0;
+  cursor: not-allowed;
+}
+
+.error-message {
+  background-color: #fff5f5;
+  border-left: 4px solid #e53e3e;
+  color: #e53e3e;
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.25rem;
+  font-size: 0.9rem;
 } 

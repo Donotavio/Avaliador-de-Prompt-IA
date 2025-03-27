@@ -51,7 +51,7 @@ const ThinkingAnimation: React.FC<ThinkingAnimationProps> = ({
     }, 3000);
 
     return () => clearInterval(stepInterval);
-  }, []);
+  }, [evaluationSteps.length]);
 
   return (
     <div className="thinking-animation">

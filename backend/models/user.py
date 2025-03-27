@@ -27,6 +27,11 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
     
+    # Campos para verificação de email
+    is_email_verified = Column(Boolean, default=False)
+    email_verification_token = Column(String(6), nullable=True)
+    email_token_expires = Column(DateTime(timezone=True), nullable=True)
+    
     # Rastreamento de sessão para segurança
     last_login = Column(DateTime(timezone=True), nullable=True)
     last_activity = Column(DateTime(timezone=True), nullable=True)

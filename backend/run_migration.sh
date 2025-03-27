@@ -1,37 +1,60 @@
 #!/bin/bash
-# Script para executar migrações usando o Alembic no ambiente de produção
+# Script para executar migrações usando o Alembic
 
 # Diretório atual do script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 cd "$SCRIPT_DIR"
 
-# Definir ambiente como produção
-export ENVIRONMENT=production
+# Definir ambiente padrão como desenvolvimento
+ENVIRONMENT="development"
+ENV_FILE=".env"
 
-echo "Executando Alembic no ambiente de produção..."
-echo "Diretório atual: $(pwd)"
-echo "Arquivo .env.production existe: $([ -f .env.production ] && echo 'Sim' || echo 'Não')"
-
-# Mostrar as variáveis do banco de dados (sem a senha)
-if [ -f .env.production ]; then
-  echo "Conteúdo das variáveis DATABASE (sem senhas):"
-  grep -i "DATABASE\|USER_DATABASE" .env.production | grep -v "PASSWORD"
+# Verificar parâmetros de linha de comando
+if [ "$1" == "prod" ] || [ "$1" == "production" ]; then
+    ENVIRONMENT="production"
+    ENV_FILE=".env.production"
+    echo "Modo: PRODUÇÃO"
+else
+    echo "Modo: DESENVOLVIMENTO (use './run_migration.sh prod' para ambiente de produção)"
 fi
 
-# Definir explicitamente as variáveis do banco de dados
-export DATABASE_URL="srv1783.hstgr.io" 
-export USER_DATABASE="u414788967_don"
-export DATABASE="u414788967_prompt_prod"
-export DATABASE_PASSWORD="o75Qr?OC^"
+export ENVIRONMENT=$ENVIRONMENT
 
-# Mostrar variáveis configuradas
-echo "Variáveis configuradas:"
+echo "Executando Alembic no ambiente de $ENVIRONMENT..."
+echo "Diretório atual: $(pwd)"
+echo "Arquivo $ENV_FILE existe: $([ -f $ENV_FILE ] && echo 'Sim' || echo 'Não')"
+
+# Verificar se o arquivo de ambiente existe
+if [ ! -f "$ENV_FILE" ]; then
+    echo "ERRO: Arquivo $ENV_FILE não encontrado!"
+    exit 1
+fi
+
+# Carregar variáveis do arquivo de ambiente
+echo "Carregando configurações de $ENV_FILE"
+export $(grep -v '^#' $ENV_FILE | xargs)
+
+# Mostrar as variáveis do banco de dados (sem a senha)
+echo "Informações de conexão com o banco de dados:"
 echo "DATABASE_URL=$DATABASE_URL"
 echo "USER_DATABASE=$USER_DATABASE"
 echo "DATABASE=$DATABASE"
 echo "DATABASE_PASSWORD=[oculto]"
 
+# Verificar se as variáveis essenciais estão definidas
+if [ -z "$DATABASE_URL" ] || [ -z "$USER_DATABASE" ] || [ -z "$DATABASE" ] || [ -z "$DATABASE_PASSWORD" ]; then
+    echo "ERRO: Variáveis de conexão com banco de dados não definidas corretamente no arquivo $ENV_FILE"
+    exit 1
+fi
+
 # Executar o Alembic para upgrade
+echo "Iniciando migração..."
 alembic upgrade head
 
-echo "Migração concluída!" 
+# Verificar resultado
+if [ $? -eq 0 ]; then
+    echo "✅ Migração concluída com sucesso!"
+else
+    echo "❌ Erro ao executar migração!"
+    exit 1
+fi 

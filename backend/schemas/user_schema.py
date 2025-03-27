@@ -28,6 +28,7 @@ class User(BaseModel):
     full_name: str
     is_active: bool
     is_admin: bool
+    is_email_verified: bool = False
     abacate_customer_id: Optional[str] = None
     phone: Optional[str] = None
     tax_id: Optional[str] = None
@@ -70,4 +71,15 @@ class PasswordRecovery(BaseModel):
 class PasswordReset(BaseModel):
     """Esquema para redefinição de senha"""
     token: str = Field(..., description="Token de recuperação enviado por e-mail")
-    new_password: str = Field(..., min_length=8, description="Nova senha do usuário (mínimo 8 caracteres)") 
+    new_password: str = Field(..., min_length=8, description="Nova senha do usuário (mínimo 8 caracteres)")
+
+# Schema para verificação de e-mail
+class EmailVerification(BaseModel):
+    """Esquema para verificação de e-mail"""
+    token: str = Field(..., description="Token de verificação enviado por e-mail")
+    user_id: str = Field(..., description="ID do usuário")
+
+# Schema para reenvio de token de verificação
+class ResendVerification(BaseModel):
+    """Esquema para reenvio de token de verificação"""
+    user_id: str = Field(..., description="ID do usuário") 

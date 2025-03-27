@@ -14,10 +14,12 @@ import os
 from dotenv import load_dotenv
 import jwt
 from passlib.context import CryptContext
+import random
+import string
 
 from services.database import get_db
 from models.user import User
-from schemas.user_schema import UserCreate, User as UserSchema, PasswordRecovery, PasswordReset
+from schemas.user_schema import UserCreate, User as UserSchema, PasswordRecovery, PasswordReset, EmailVerification, ResendVerification
 from schemas.token_schema import Token, RefreshRequest
 from services.auth import (
     authenticate_user, 
@@ -70,6 +72,64 @@ def format_phone(value: str) -> str:
         return cleaned
     return cleaned
 
+def generate_verification_token() -> str:
+    """
+    Gera um token numérico de 6 dígitos para verificação de e-mail
+    """
+    return ''.join(random.choices(string.digits, k=6))
+
+def send_verification_email(user: User, db: Session) -> bool:
+    """
+    Gera um token de verificação e envia email para o usuário
+    """
+    # Gera um token de verificação
+    token = generate_verification_token()
+    
+    # Define o tempo de expiração (15 minutos)
+    expiration = datetime.now() + timedelta(minutes=15)
+    
+    # Atualiza o usuário com o token
+    user.email_verification_token = token
+    user.email_token_expires = expiration
+    db.commit()
+    
+    # Cria o template do e-mail
+    subject = "Verificação de Conta"
+    html_content = f"""
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background-color: #4a56e2; color: white; padding: 10px 20px; text-align: center; }}
+            .content {{ padding: 20px; background-color: #f9f9f9; border: 1px solid #ddd; }}
+            .token {{ font-size: 24px; font-weight: bold; text-align: center; margin: 20px 0; padding: 10px; background-color: #eee; }}
+            .footer {{ font-size: 12px; text-align: center; margin-top: 20px; color: #666; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h2>Verificação de Conta</h2>
+            </div>
+            <div class="content">
+                <p>Olá {user.full_name},</p>
+                <p>Obrigado por se cadastrar! Para verificar sua conta, utilize o código abaixo:</p>
+                <div class="token">{token}</div>
+                <p>Este código é válido por 15 minutos.</p>
+                <p>Se você não solicitou este código, por favor ignore este e-mail.</p>
+            </div>
+            <div class="footer">
+                <p>Esta é uma mensagem automática, por favor não responda.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    # Envia o e-mail
+    return send_email(user.email, subject, html_content)
+
 def send_email(to_email: str, subject: str, html_content: str) -> bool:
     """
     Envia um e-mail com o conteúdo especificado
@@ -121,7 +181,8 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
         "email": current_user.email,
         "full_name": current_user.full_name,
         "is_active": current_user.is_active,
-        "is_admin": current_user.is_admin
+        "is_admin": current_user.is_admin,
+        "is_email_verified": current_user.is_email_verified
     }
 
 @router.post("/register", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
@@ -149,13 +210,17 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)) -> Any:
         new_user = User(
             email=user_data.email,
             full_name=user_data.full_name,
-            hashed_password=User.get_password_hash(user_data.password)
+            hashed_password=User.get_password_hash(user_data.password),
+            is_email_verified=False
         )
         
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
         logger.info(f"Usuário registrado com sucesso: {user_data.email}")
+        
+        # Envia e-mail de verificação
+        send_verification_email(new_user, db)
         
         # Tenta criar o cliente no AbacatePay (não impede a criação local se falhar)
         try:
@@ -199,14 +264,117 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)) -> Any:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro ao registrar usuário. Por favor, tente novamente."
+            detail="Erro no banco de dados. Por favor, tente novamente mais tarde."
         )
     except Exception as e:
-        logger.error(f"Erro inesperado ao registrar usuário: {str(e)}")
+        logger.error(f"Erro ao registrar usuário: {str(e)}")
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro interno do servidor. Por favor, tente novamente mais tarde."
+            detail=str(e)
+        )
+
+@router.post("/verify-email", status_code=status.HTTP_200_OK)
+def verify_email(verification: EmailVerification, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """
+    Verifica o e-mail de um usuário com o token enviado
+    """
+    try:
+        # Busca o usuário pelo ID
+        user = db.query(User).filter(User.id == verification.user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usuário não encontrado"
+            )
+        
+        # Verifica se o e-mail já foi verificado
+        if user.is_email_verified:
+            return {"message": "E-mail já foi verificado"}
+        
+        # Verifica se o token é válido
+        if not user.email_verification_token or user.email_verification_token != verification.token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token de verificação inválido"
+            )
+        
+        # Verifica se o token expirou
+        if user.email_token_expires and user.email_token_expires < datetime.now():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token de verificação expirado"
+            )
+        
+        # Atualiza o usuário como verificado
+        user.is_email_verified = True
+        user.email_verification_token = None
+        user.email_token_expires = None
+        db.commit()
+        
+        # Gera tokens para login automático
+        tokens = create_tokens_for_user(user)
+        
+        # Retorna tokens de autenticação para login automático
+        return {
+            "message": "E-mail verificado com sucesso",
+            "access_token": tokens.access_token,
+            "refresh_token": tokens.refresh_token,
+            "token_type": "bearer"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao verificar e-mail: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao verificar e-mail. Por favor, tente novamente mais tarde."
+        )
+
+@router.post("/resend-verification", status_code=status.HTTP_200_OK)
+def resend_verification(resend: ResendVerification, db: Session = Depends(get_db)) -> Dict[str, str]:
+    """
+    Reenvia o token de verificação para o e-mail do usuário
+    """
+    try:
+        # Busca o usuário pelo ID
+        user = db.query(User).filter(User.id == resend.user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usuário não encontrado"
+            )
+        
+        # Verifica se o e-mail já foi verificado
+        if user.is_email_verified:
+            return {"message": "E-mail já foi verificado"}
+        
+        # Verifica limite de tempo para reenvio (1 minuto entre solicitações)
+        if user.email_token_expires and user.email_token_expires > datetime.now() - timedelta(minutes=14):
+            time_left = int((user.email_token_expires - (datetime.now() - timedelta(minutes=14))).total_seconds())
+            if time_left > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Aguarde {time_left} segundos antes de solicitar um novo código"
+                )
+        
+        # Envia um novo e-mail de verificação
+        if send_verification_email(user, db):
+            return {"message": "E-mail de verificação reenviado com sucesso"}
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao enviar e-mail de verificação"
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao reenviar verificação: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao reenviar verificação. Por favor, tente novamente mais tarde."
         )
 
 @router.post("/login", response_model=Token)
@@ -658,57 +826,4 @@ def reset_password(reset: PasswordReset, db: Session = Depends(get_db)) -> Token
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao processar a solicitação."
-        )
-
-def authenticate_user(email: str, password: str, db: Session) -> Optional[User]:
-    """
-    Autentica um usuário verificando seu email e senha
-    """
-    try:
-        user = db.query(User).filter(User.email == email).first()
-        
-        if not user:
-            logger.warning(f"Tentativa de login com email não cadastrado: {email}")
-            return None
-            
-        if not user.is_active:
-            logger.warning(f"Tentativa de login em conta inativa: {email}")
-            return None
-            
-        # Verifica se a conta está bloqueada devido a muitas tentativas de login
-        if user.locked_until and user.locked_until > datetime.utcnow():
-            logger.warning(f"Tentativa de login em conta bloqueada: {email}")
-            remaining_time = user.locked_until - datetime.utcnow()
-            # Não mostrar mensagem específica para evitar exposição de informação
-            return None
-        
-        try:
-            if not user.verify_password(password):
-                # Incrementa contador de falhas
-                user.failed_login_attempts += 1
-                
-                # Bloqueia a conta após 5 tentativas
-                if user.failed_login_attempts >= 5:
-                    user.locked_until = datetime.utcnow() + timedelta(minutes=15)
-                    logger.warning(f"Conta bloqueada após 5 tentativas falhas: {email}")
-                
-                db.commit()
-                logger.warning(f"Senha incorreta para o usuário: {email}")
-                return None
-                
-            # Login bem sucedido
-            user.failed_login_attempts = 0
-            user.last_login = datetime.utcnow()
-            db.commit()
-            logger.info(f"Login bem sucedido para o usuário: {email}")
-            return user
-        except RuntimeError as re:
-            # Captura exceção específica de erro de verificação de senha
-            logger.error(f"Erro crítico na verificação de senha: {str(re)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Erro crítico no sistema de autenticação. Tente novamente mais tarde."
-            )
-    except Exception as e:
-        logger.error(f"Erro ao autenticar usuário: {str(e)}")
-        return None 
+        ) 
