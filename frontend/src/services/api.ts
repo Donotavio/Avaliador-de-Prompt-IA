@@ -3,7 +3,7 @@ import { notifyTokenExpired } from './auth';
 
 // URL base da API
 export const API_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://avaliadorprompt.com.br/api'
+  ? '/api'  // Usando caminho relativo em produção
   : 'http://localhost:8000/api';
 
 // Armazenamento do token CSRF

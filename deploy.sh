@@ -37,34 +37,43 @@ else
     echo "CORS_ORIGINS=https://avaliadorprompt.com,http://avaliadorprompt.com,https://www.avaliadorprompt.com,http://www.avaliadorprompt.com" >> backend/.env.production
 fi
 
-# Atualizar credenciais do banco de dados no .env.production
+# Definindo variáveis para o banco de dados
+DB_HOST="srv1783.hstgr.io"
+DB_PORT="3306"
+DB_USER="u414788967_don"
+DB_NAME="u414788967_prompt_prod"
+DB_PASSWORD="o75Qr?OC^"
+
+# Usando a senha diretamente sem codificação manual
+# A conexão SQLAlchemy tratará isso automaticamente
+DATABASE_URL="mysql+pymysql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+
 echo -e "${YELLOW}Atualizando credenciais do banco de dados no .env.production...${NC}"
-# Atualiza DATABASE_URL
+
+# Atualiza DATABASE_URL com a string de conexão completa (usando aspas simples)
 if grep -q "DATABASE_URL" backend/.env.production; then
-    sed -i '' 's/DATABASE_URL=.*/DATABASE_URL="srv1783.hstgr.io"/' backend/.env.production
+    sed -i '' "s|DATABASE_URL=.*|DATABASE_URL='$DATABASE_URL'|" backend/.env.production
 else
-    echo 'DATABASE_URL="srv1783.hstgr.io"' >> backend/.env.production
+    echo "DATABASE_URL='$DATABASE_URL'" >> backend/.env.production
 fi
 
-# Atualiza USER_DATABASE
+# Mantém também as variáveis individuais (para compatibilidade)
 if grep -q "USER_DATABASE" backend/.env.production; then
-    sed -i '' 's/USER_DATABASE=.*/USER_DATABASE="u414788967_don"/' backend/.env.production
+    sed -i '' "s/USER_DATABASE=.*/USER_DATABASE=\"$DB_USER\"/" backend/.env.production
 else
-    echo 'USER_DATABASE="u414788967_don"' >> backend/.env.production
+    echo "USER_DATABASE=\"$DB_USER\"" >> backend/.env.production
 fi
 
-# Atualiza DATABASE
 if grep -q "DATABASE=" backend/.env.production; then
-    sed -i '' 's/DATABASE=.*/DATABASE="u414788967_prompt_prod"/' backend/.env.production
+    sed -i '' "s/DATABASE=.*/DATABASE=\"$DB_NAME\"/" backend/.env.production
 else
-    echo 'DATABASE="u414788967_prompt_prod"' >> backend/.env.production
+    echo "DATABASE=\"$DB_NAME\"" >> backend/.env.production
 fi
 
-# Atualiza DATABASE_PASSWORD
 if grep -q "DATABASE_PASSWORD" backend/.env.production; then
-    sed -i '' 's/DATABASE_PASSWORD=.*/DATABASE_PASSWORD="o75Qr?OC^"/' backend/.env.production
+    sed -i '' "s/DATABASE_PASSWORD=.*/DATABASE_PASSWORD=\"$DB_PASSWORD\"/" backend/.env.production
 else
-    echo 'DATABASE_PASSWORD="o75Qr?OC^"' >> backend/.env.production
+    echo "DATABASE_PASSWORD=\"$DB_PASSWORD\"" >> backend/.env.production
 fi
 
 # Prepara o frontend para produção
@@ -153,54 +162,151 @@ python -c "
 import pymysql
 import os
 from dotenv import load_dotenv
+import urllib.parse
+
 load_dotenv('.env.production')
 
-# Obtém as variáveis de ambiente
-db_host = os.getenv('DATABASE_URL', 'srv1783.hstgr.io')
-db_user = os.getenv('USER_DATABASE', 'u414788967_don')  # Certifique-se de usar USER_DATABASE e não DATABASE
-db_password = os.getenv('DATABASE_PASSWORD', '')
-db_name = os.getenv('DATABASE', 'u414788967_prompt_prod')
-
-print(f'Tentando conectar: usuário={db_user}, banco={db_name}, host={db_host}')
+# Obtém DATABASE_URL primeiro
+db_url = os.getenv('DATABASE_URL', '')
+print(f'DATABASE_URL encontrado: {db_url}')
 
 try:
-    conn = pymysql.connect(
-        host=db_host,
-        user=db_user,  # Usando USER_DATABASE
-        password=db_password,
-        database=db_name,  # Usando DATABASE
-        port=3306
-    )
-    cursor = conn.cursor()
-    cursor.execute('SELECT 1')
-    result = cursor.fetchone()
-    print(f'Conexão com banco de dados bem-sucedida! Resultado: {result}')
-    conn.close()
+    # Verifica se é uma URL válida com usuário:senha@host:porta/database
+    if 'mysql+pymysql://' in db_url:
+        print('Tentando conexão direta com DATABASE_URL')
+        
+        # Remove o prefixo e divide por @
+        url_parts = db_url.replace('mysql+pymysql://', '').split('@')
+        if len(url_parts) != 2:
+            raise ValueError('Formato de URL inválido')
+            
+        user_pass = url_parts[0].split(':')
+        if len(user_pass) != 2:
+            raise ValueError('Formato de usuário/senha inválido')
+            
+        host_port_db = url_parts[1].split('/')
+        if len(host_port_db) != 2:
+            raise ValueError('Formato de host/database inválido')
+            
+        host_port = host_port_db[0].split(':')
+        
+        # Extrair partes da URL
+        db_user = user_pass[0]
+        db_password = user_pass[1]
+        db_host = host_port[0]
+        db_port = int(host_port[1]) if len(host_port) > 1 else 3306
+        db_name = host_port_db[1]
+        
+        print(f'Tentando conectar com: host={db_host}, port={db_port}, user={db_user}, db={db_name}')
+        
+        # Tenta conexão direta com os parâmetros extraídos
+        conn = pymysql.connect(
+            host=db_host,
+            port=db_port,
+            user=db_user,
+            password=db_password,
+            database=db_name
+        )
+        cursor = conn.cursor()
+        cursor.execute('SELECT 1')
+        result = cursor.fetchone()
+        print(f'Conexão com banco de dados bem-sucedida usando DATABASE_URL! Resultado: {result}')
+        conn.close()
+    else:
+        # Fallback para as variáveis separadas
+        print('DATABASE_URL não encontrada ou inválida, usando variáveis individuais')
+        db_host = os.getenv('DATABASE_URL', 'srv1783.hstgr.io')
+        db_user = os.getenv('USER_DATABASE', 'u414788967_don')
+        db_password = os.getenv('DATABASE_PASSWORD', '')
+        db_name = os.getenv('DATABASE', 'u414788967_prompt_prod')
+        
+        print(f'Tentando conectar com: host={db_host}, user={db_user}, db={db_name}')
+        
+        conn = pymysql.connect(
+            host=db_host,
+            user=db_user,
+            password=db_password,
+            database=db_name,
+            port=3306
+        )
+        cursor = conn.cursor()
+        cursor.execute('SELECT 1')
+        result = cursor.fetchone()
+        print(f'Conexão com banco de dados bem-sucedida usando variáveis separadas! Resultado: {result}')
+        conn.close()
 except Exception as e:
     print(f'Erro ao conectar ao banco de dados: {e}')
+    
+    # Tenta abordagem alternativa se a primeira falhar
+    try:
+        print('Tentando abordagem alternativa de conexão')
+        # Obtém variáveis individuais
+        db_host = os.getenv('DATABASE_URL', 'srv1783.hstgr.io')
+        db_user = os.getenv('USER_DATABASE', 'u414788967_don')
+        db_password = os.getenv('DATABASE_PASSWORD', '')
+        db_name = os.getenv('DATABASE', 'u414788967_prompt_prod')
+        
+        print(f'Tentando conectar com: host={db_host}, user={db_user}, db={db_name}')
+        
+        conn = pymysql.connect(
+            host=db_host,
+            user=db_user,
+            password=db_password,
+            database=db_name,
+            port=3306
+        )
+        cursor = conn.cursor()
+        cursor.execute('SELECT 1')
+        result = cursor.fetchone()
+        print(f'Conexão alternativa bem-sucedida! Resultado: {result}')
+        conn.close()
+    except Exception as e2:
+        print(f'Erro na tentativa alternativa: {e2}')
 "
 ENDSSH
 
 # Execute as migrações de banco de dados
 echo -e "${YELLOW}Executando migrações do banco de dados com Alembic...${NC}"
-ssh $VPS_USER@$VPS_IP << 'ENDSSH'
+ssh $VPS_USER@$VPS_IP << EOF
 cd /var/www/avaliadorprompt/backend
 source ../venv/bin/activate
+
 # Instala o alembic se não estiver instalado
 pip install alembic
+
 # Define explicitamente as variáveis de ambiente para o banco de dados
 export ENVIRONMENT=production
-export DATABASE_URL="srv1783.hstgr.io"
-export USER_DATABASE="u414788967_don"
-export DATABASE="u414788967_prompt_prod"
-export DATABASE_PASSWORD="o75Qr?OC^"
-# Mostra as variáveis (exceto senha)
-echo "DATABASE_URL=$DATABASE_URL"
-echo "USER_DATABASE=$USER_DATABASE"
-echo "DATABASE=$DATABASE"
+
+# Use variáveis separadas para evitar problemas de aspas e codificação
+export DB_HOST="$DB_HOST"
+export DB_PORT="$DB_PORT"
+export DB_USER="$DB_USER"
+export DB_PASSWORD="$DB_PASSWORD"
+export DB_NAME="$DB_NAME"
+
+# Executa as migrações usando variáveis separadas
+echo "Executando migrações do banco de dados..."
+python -c "
+import os
+import alembic.config
+
+# Configura URL de conexão para alembic dinamicamente
+os.environ['SQLALCHEMY_DATABASE_URI'] = f'mysql+pymysql://{os.environ['DB_USER']}:{os.environ['DB_PASSWORD']}@{os.environ['DB_HOST']}:{os.environ['DB_PORT']}/{os.environ['DB_NAME']}'
+
 # Executa as migrações
-alembic upgrade head
-ENDSSH
+alembic_args = ['--raiseerr', 'upgrade', 'head']
+alembic.config.main(argv=alembic_args)
+"
+
+if [ \$? -eq 0 ]; then
+    echo "Migrações executadas com sucesso!"
+else
+    echo "Falha ao executar migrações. Tentando abordagem alternativa..."
+    # Tenta executar migrações diretamente
+    cd /var/www/avaliadorprompt/backend
+    PYTHONPATH=/var/www/avaliadorprompt/backend alembic upgrade head
+fi
+EOF
 
 # Envia o arquivo de serviço systemd
 echo -e "${YELLOW}Configurando serviço systemd...${NC}"

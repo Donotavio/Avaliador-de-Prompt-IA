@@ -116,6 +116,7 @@ app.add_middleware(
 # Adiciona middleware de proteção CSRF
 if os.getenv("ENV") == "production":
     app.add_middleware(CSRFProtectionMiddleware)
+    logger.info("Proteção CSRF ativada em ambiente de produção")
 else:
     logger.warning("Proteção CSRF desabilitada em ambiente de desenvolvimento")
 

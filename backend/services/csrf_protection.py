@@ -171,18 +171,40 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         safe_methods = {"GET", "HEAD", "OPTIONS"}
         
         # Rotas que estão isentas de verificação CSRF
-        exempt_paths = {"/api/auth/login", "/api/auth/register", "/api/auth/forgot-password", "/evaluate", "/api/prompts/evaluate", "/api/payments/create"}
+        exempt_paths = {
+            "/api/auth/login", 
+            "/api/auth/register", 
+            "/api/auth/forgot-password", 
+            "/evaluate", 
+            "/api/prompts/evaluate", 
+            "/api/payments/create",
+            "/api/contact",        # Formulário de contato
+            "/api/health",         # Verificação de saúde da API
+            "/api/auth/csrf-token", # Obtenção do token CSRF
+            "/api/docs",            # Documentação da API
+            "/api/redoc",           # Documentação alternativa
+            "/api/openapi.json"     # Esquema OpenAPI
+        }
         
-        # Verifica se é necessário verificar o token CSRF
-        if request.method not in safe_methods and request.url.path not in exempt_paths:
-            # Verifica o token CSRF
-            if not verify_csrf_token(request):
-                logger.warning(f"Tentativa de requisição sem token CSRF válido: {request.url.path}")
-                return Response(
-                    content='{"detail":"Token CSRF inválido"}',
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    media_type="application/json"
-                )
+        # Verifica se o path está isento de proteção CSRF
+        path = request.url.path
+        if any(path == exempt_path or path.startswith(exempt_path + "/") for exempt_path in exempt_paths):
+            logger.info(f"Rota isenta de CSRF: {path}")
+            # Importante: não verifica o token para rotas isentas
+            return await call_next(request)
+        
+        # Métodos que não alteram estado não precisam de verificação
+        if request.method in safe_methods:
+            return await call_next(request)
+            
+        # Verifica o token CSRF para métodos que alteram estado e rotas não isentas
+        if not verify_csrf_token(request):
+            logger.warning(f"Tentativa de requisição sem token CSRF válido: {path}")
+            return Response(
+                content='{"detail":"Token CSRF inválido"}',
+                status_code=status.HTTP_403_FORBIDDEN,
+                media_type="application/json"
+            )
         
         # Processa a requisição
         response = await call_next(request)

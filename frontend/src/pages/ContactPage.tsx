@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Card from '../components/Card';
+import { fetchCsrfToken, apiFetch } from '../services/api';
 
 interface FormState {
   name: string;
@@ -61,12 +62,18 @@ const ContactPage: React.FC = () => {
     setSubmitStatus({});
     
     try {
-      const response = await fetch("/api/contact", {
-        method: "POST",
+      // Obter o token CSRF antes de enviar a requisição
+      const csrfToken = await fetchCsrfToken();
+      
+      // Usar fetch diretamente com o token CSRF
+      const response = await fetch('/api/contact', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
         },
-        body: JSON.stringify(formState),
+        credentials: 'include',
+        body: JSON.stringify(formState)
       });
       
       const data = await response.json();
@@ -89,6 +96,7 @@ const ContactPage: React.FC = () => {
         });
       }
     } catch (error) {
+      console.error("Erro ao enviar formulário:", error);
       setSubmitStatus({
         success: false,
         message: "Erro de conexão. Por favor, verifique sua internet e tente novamente.",
