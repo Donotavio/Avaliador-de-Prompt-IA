@@ -37,6 +37,36 @@ else
     echo "CORS_ORIGINS=https://avaliadorprompt.com,http://avaliadorprompt.com,https://www.avaliadorprompt.com,http://www.avaliadorprompt.com" >> backend/.env.production
 fi
 
+# Atualizar credenciais do banco de dados no .env.production
+echo -e "${YELLOW}Atualizando credenciais do banco de dados no .env.production...${NC}"
+# Atualiza DATABASE_URL
+if grep -q "DATABASE_URL" backend/.env.production; then
+    sed -i '' 's/DATABASE_URL=.*/DATABASE_URL="srv1783.hstgr.io"/' backend/.env.production
+else
+    echo 'DATABASE_URL="srv1783.hstgr.io"' >> backend/.env.production
+fi
+
+# Atualiza USER_DATABASE
+if grep -q "USER_DATABASE" backend/.env.production; then
+    sed -i '' 's/USER_DATABASE=.*/USER_DATABASE="u414788967_don"/' backend/.env.production
+else
+    echo 'USER_DATABASE="u414788967_don"' >> backend/.env.production
+fi
+
+# Atualiza DATABASE
+if grep -q "DATABASE=" backend/.env.production; then
+    sed -i '' 's/DATABASE=.*/DATABASE="u414788967_prompt_prod"/' backend/.env.production
+else
+    echo 'DATABASE="u414788967_prompt_prod"' >> backend/.env.production
+fi
+
+# Atualiza DATABASE_PASSWORD
+if grep -q "DATABASE_PASSWORD" backend/.env.production; then
+    sed -i '' 's/DATABASE_PASSWORD=.*/DATABASE_PASSWORD="o75Qr?OC^"/' backend/.env.production
+else
+    echo 'DATABASE_PASSWORD="o75Qr?OC^"' >> backend/.env.production
+fi
+
 # Prepara o frontend para produção
 echo -e "${YELLOW}Compilando o frontend para produção...${NC}"
 cd frontend
@@ -124,14 +154,21 @@ import pymysql
 import os
 from dotenv import load_dotenv
 load_dotenv('.env.production')
+
+# Obtém as variáveis de ambiente
+db_host = os.getenv('DATABASE_URL', 'srv1783.hstgr.io')
+db_user = os.getenv('USER_DATABASE', 'u414788967_don')  # Certifique-se de usar USER_DATABASE e não DATABASE
+db_password = os.getenv('DATABASE_PASSWORD', '')
+db_name = os.getenv('DATABASE', 'u414788967_prompt_prod')
+
+print(f'Tentando conectar: usuário={db_user}, banco={db_name}, host={db_host}')
+
 try:
-    db_url = os.getenv('DATABASE_URL')
-    print(f'Testando conexão com: {db_url}')
     conn = pymysql.connect(
-        host='srv1783.hstgr.io',
-        user='u414788967_don',
-        password=os.getenv('DATABASE_PASSWORD'),
-        database='u414788967_prom_evaluate',
+        host=db_host,
+        user=db_user,  # Usando USER_DATABASE
+        password=db_password,
+        database=db_name,  # Usando DATABASE
         port=3306
     )
     cursor = conn.cursor()
@@ -151,6 +188,16 @@ cd /var/www/avaliadorprompt/backend
 source ../venv/bin/activate
 # Instala o alembic se não estiver instalado
 pip install alembic
+# Define explicitamente as variáveis de ambiente para o banco de dados
+export ENVIRONMENT=production
+export DATABASE_URL="srv1783.hstgr.io"
+export USER_DATABASE="u414788967_don"
+export DATABASE="u414788967_prompt_prod"
+export DATABASE_PASSWORD="o75Qr?OC^"
+# Mostra as variáveis (exceto senha)
+echo "DATABASE_URL=$DATABASE_URL"
+echo "USER_DATABASE=$USER_DATABASE"
+echo "DATABASE=$DATABASE"
 # Executa as migrações
 alembic upgrade head
 ENDSSH

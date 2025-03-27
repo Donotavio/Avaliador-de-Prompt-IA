@@ -34,6 +34,11 @@ database_user = os.getenv("USER_DATABASE")
 database_password = os.getenv("DATABASE_PASSWORD")
 database_name = os.getenv("DATABASE")
 
+# Log para depuração
+print(f"[DEBUG] database_url: {raw_database_url}")
+print(f"[DEBUG] database_user: {database_user}")
+print(f"[DEBUG] database_name: {database_name}")
+
 # Construir URL completa para o MySQL
 if raw_database_url and ("mysql://" in raw_database_url or "mysql+pymysql://" in raw_database_url):
     # Já é uma URL completa
@@ -41,6 +46,7 @@ if raw_database_url and ("mysql://" in raw_database_url or "mysql+pymysql://" in
 else:
     # Construir a partir dos componentes
     host = "srv1783.hstgr.io" if not raw_database_url else raw_database_url
+    # Certifica-se de usar o usuário correto (database_user) e não o nome do banco (database_name)
     database_url = f"mysql+pymysql://{database_user}:{database_password}@{host}:3306/{database_name}"
 
 # Log para debug

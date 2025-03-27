@@ -18,6 +18,11 @@ from utils.sql_security import safe_execute, log_sql_warning
 # Configuração adicional de logging
 migration_logger = logging.getLogger("alembic.migrations")
 
+# Verifica se a configuração de banco de dados está correta
+print(f"DATABASE_URL: {os.getenv('DATABASE_URL')}")
+print(f"USER_DATABASE: {os.getenv('USER_DATABASE')}")
+print(f"DATABASE: {os.getenv('DATABASE')}")
+
 # Função para execução segura de SQL em migrações
 def execute_migration_sql(connection, sql_query, params=None):
     """
