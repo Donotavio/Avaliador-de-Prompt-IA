@@ -9,30 +9,26 @@ const PrivacyPage: React.FC = () => {
     </svg>
   );
 
-  // Ícone para seções
-  const SectionIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10"></circle>
-      <line x1="12" y1="16" x2="12" y2="12"></line>
-      <line x1="12" y1="8" x2="12.01" y2="8"></line>
-    </svg>
+  // Ícone para seções numeradas
+  const NumberIcon = ({ number }: { number: number }) => (
+    <div className="section-number">{number}</div>
   );
 
   return (
-    <div className="container page-container">
-      <div className="policy-header text-center">
+    <div className="policy-page">
+      <div className="policy-header">
         <ShieldIcon />
-        <h1 className="main-title">Política de Privacidade</h1>
-        <p className="subtitle">Como protegemos e utilizamos suas informações</p>
-        <p className="last-updated">Última atualização: {new Date().toLocaleDateString('pt-BR')}</p>
+        <h1>Política de Privacidade</h1>
+        <p>Como protegemos e utilizamos suas informações</p>
+        <p className="last-updated">Última atualização: 27/03/2025</p>
       </div>
       
-      <Card className="policy-card">
+      <Card>
         <div className="policy-content">
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">1. Introdução</h2>
+              <NumberIcon number={1} />
+              <h2>Introdução</h2>
             </div>
             <p>
               Bem-vindo à Política de Privacidade do Avaliador de Prompt IA. Este documento explica como coletamos, 
@@ -45,8 +41,8 @@ const PrivacyPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">2. Informações que Coletamos</h2>
+              <NumberIcon number={2} />
+              <h2>Informações que Coletamos</h2>
             </div>
             <p>Podemos coletar os seguintes tipos de informações:</p>
             <ul className="policy-list">
@@ -59,8 +55,8 @@ const PrivacyPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">3. Como Utilizamos suas Informações</h2>
+              <NumberIcon number={3} />
+              <h2>Como Utilizamos suas Informações</h2>
             </div>
             <p>Utilizamos suas informações para:</p>
             <ul className="policy-list">
@@ -75,8 +71,8 @@ const PrivacyPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">4. Compartilhamento de Informações</h2>
+              <NumberIcon number={4} />
+              <h2>Compartilhamento de Informações</h2>
             </div>
             <p>
               Não vendemos suas informações pessoais. Podemos compartilhar suas informações nas seguintes circunstâncias:
@@ -91,8 +87,8 @@ const PrivacyPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">5. Segurança</h2>
+              <NumberIcon number={5} />
+              <h2>Segurança</h2>
             </div>
             <p>
               Implementamos medidas de segurança técnicas e organizacionais para proteger suas informações contra acesso não autorizado, 
@@ -102,8 +98,8 @@ const PrivacyPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">6. Seus Direitos</h2>
+              <NumberIcon number={6} />
+              <h2>Seus Direitos</h2>
             </div>
             <p>Dependendo da sua localização, você pode ter direitos relacionados aos seus dados pessoais, incluindo:</p>
             <ul className="policy-list">
@@ -116,8 +112,8 @@ const PrivacyPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">7. Alterações nesta Política</h2>
+              <NumberIcon number={7} />
+              <h2>Alterações nesta Política</h2>
             </div>
             <p>
               Podemos atualizar esta política periodicamente. Publicaremos quaisquer alterações em nosso site e, 
@@ -127,12 +123,12 @@ const PrivacyPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">8. Contato</h2>
+              <NumberIcon number={8} />
+              <h2>Contato</h2>
             </div>
             <p>
               Se você tiver dúvidas ou preocupações sobre esta política ou nossas práticas de privacidade, 
-              entre em contato conosco em <a href="mailto:privacidade@avaliadorprompt.com.br" className="contact-link">privacidade@avaliadorprompt.com.br</a>.
+              entre em contato conosco em <a href="mailto:contato@avaliadorprompt.com">contato@avaliadorprompt.com</a>.
             </p>
           </div>
         </div>

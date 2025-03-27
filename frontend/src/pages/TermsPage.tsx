@@ -13,29 +13,26 @@ const TermsPage: React.FC = () => {
     </svg>
   );
 
-  // Ícone para seções
-  const SectionIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-      <line x1="7" y1="7" x2="7.01" y2="7"></line>
-    </svg>
+  // Ícone para seções numeradas
+  const NumberIcon = ({ number }: { number: number }) => (
+    <div className="section-number">{number}</div>
   );
 
   return (
-    <div className="container page-container">
-      <div className="policy-header text-center">
+    <div className="policy-page">
+      <div className="policy-header">
         <DocumentIcon />
-        <h1 className="main-title">Termos de Uso</h1>
-        <p className="subtitle">Condições para utilização da nossa plataforma</p>
-        <p className="last-updated">Última atualização: {new Date().toLocaleDateString('pt-BR')}</p>
+        <h1>Termos de Uso</h1>
+        <p>Condições para utilização da nossa plataforma</p>
+        <p className="last-updated">Última atualização: 27/03/2025</p>
       </div>
       
-      <Card className="policy-card">
+      <Card>
         <div className="policy-content">
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">1. Aceitação dos Termos</h2>
+              <NumberIcon number={1} />
+              <h2>Aceitação dos Termos</h2>
             </div>
             <p>
               Ao acessar ou usar o Avaliador de Prompt IA, você concorda em cumprir e ficar vinculado a estes Termos de Uso. 
@@ -45,8 +42,8 @@ const TermsPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">2. Descrição do Serviço</h2>
+              <NumberIcon number={2} />
+              <h2>Descrição do Serviço</h2>
             </div>
             <p>
               O Avaliador de Prompt IA é uma plataforma que permite aos usuários analisar e melhorar prompts para modelos 
@@ -56,8 +53,8 @@ const TermsPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">3. Contas de Usuário</h2>
+              <NumberIcon number={3} />
+              <h2>Contas de Usuário</h2>
             </div>
             <p>
               Para acessar certos recursos, você precisa criar uma conta. Você é responsável por manter a confidencialidade 
@@ -68,8 +65,8 @@ const TermsPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">4. Uso Aceitável</h2>
+              <NumberIcon number={4} />
+              <h2>Uso Aceitável</h2>
             </div>
             <p>Ao usar nossos serviços, você concorda em não:</p>
             <ul className="policy-list">
@@ -84,8 +81,8 @@ const TermsPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">5. Conteúdo do Usuário</h2>
+              <NumberIcon number={5} />
+              <h2>Conteúdo do Usuário</h2>
             </div>
             <p>
               Você mantém a propriedade de qualquer conteúdo que enviar para nossa plataforma. Ao enviar conteúdo, 
@@ -96,8 +93,8 @@ const TermsPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">6. Assinaturas e Pagamentos</h2>
+              <NumberIcon number={6} />
+              <h2>Assinaturas e Pagamentos</h2>
             </div>
             <p>
               Oferecemos planos de assinatura pagos que concedem acesso a recursos adicionais. As cobranças são feitas 
@@ -107,8 +104,8 @@ const TermsPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">7. Propriedade Intelectual</h2>
+              <NumberIcon number={7} />
+              <h2>Propriedade Intelectual</h2>
             </div>
             <p>
               Nossa plataforma, incluindo todo o conteúdo, recursos e funcionalidades, é de nossa propriedade ou de nossos 
@@ -119,8 +116,8 @@ const TermsPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">8. Limitação de Responsabilidade</h2>
+              <NumberIcon number={8} />
+              <h2>Limitação de Responsabilidade</h2>
             </div>
             <p>
               Em nenhuma circunstância seremos responsáveis por quaisquer danos indiretos, incidentais, especiais, 
@@ -130,8 +127,8 @@ const TermsPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">9. Modificações nos Termos</h2>
+              <NumberIcon number={9} />
+              <h2>Modificações nos Termos</h2>
             </div>
             <p>
               Reservamo-nos o direito de modificar estes termos a qualquer momento. Alterações entrarão em vigor após a 
@@ -142,8 +139,8 @@ const TermsPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">10. Rescisão</h2>
+              <NumberIcon number={10} />
+              <h2>Rescisão</h2>
             </div>
             <p>
               Podemos encerrar ou suspender seu acesso aos nossos serviços imediatamente, sem aviso prévio, por qualquer 
@@ -153,8 +150,8 @@ const TermsPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">11. Lei Aplicável</h2>
+              <NumberIcon number={11} />
+              <h2>Lei Aplicável</h2>
             </div>
             <p>
               Estes termos serão regidos e interpretados de acordo com as leis do Brasil, independentemente de seus 
@@ -164,12 +161,12 @@ const TermsPage: React.FC = () => {
           
           <div className="policy-section">
             <div className="section-header">
-              <SectionIcon />
-              <h2 className="section-title">12. Contato</h2>
+              <NumberIcon number={12} />
+              <h2>Contato</h2>
             </div>
             <p>
-              Se você tiver alguma dúvida sobre estes Termos de Uso, entre em contato conosco pelo e-mail 
-              <a href="mailto:termos@avaliadorprompt.com.br" className="contact-link"> termos@avaliadorprompt.com.br</a>.
+              Se você tiver alguma dúvida sobre estes Termos de Uso, entre em contato conosco pelo e-mail
+              <a href="mailto:contato@avaliadorprompt.com"> contato@avaliadorprompt.com</a>.
             </p>
           </div>
         </div>

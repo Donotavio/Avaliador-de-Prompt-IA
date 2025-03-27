@@ -147,7 +147,7 @@ const ContactPage: React.FC = () => {
               
               <div className="contact-info-line">
                 <EmailIcon />
-                <a href="mailto:contato@avaliadorprompt.com">contato@avaliadorprompt.com.br</a>
+                <a href="mailto:contato@avaliadorprompt.com">contato@avaliadorprompt.com</a>
               </div>
               
               <div className="mt-4">
