@@ -8,12 +8,25 @@ import sys
 import logging
 
 # Adiciona o diretório pai ao sys.path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(base_dir)
 
 from utils.sql_security import safe_execute
 
-# Carregar variáveis de ambiente do arquivo .env
-load_dotenv()
+# Verificar arquivo .env.production primeiro, depois ENVIRONMENT
+env_file = os.path.join(base_dir, '.env.production')
+env_dev_file = os.path.join(base_dir, '.env')
+
+env_prod_exists = os.path.exists(env_file)
+is_production = env_prod_exists or os.getenv('ENVIRONMENT') == 'production'
+
+# Carregar variáveis de ambiente do arquivo correto
+if is_production:
+    print(f"Carregando configurações de {env_file}")
+    load_dotenv(env_file)
+else:
+    print(f"Carregando configurações de {env_dev_file}")
+    load_dotenv(env_dev_file)
 
 # Obter a URL da base de dados - verificando se é uma URL completa ou se precisamos construí-la
 raw_database_url = os.getenv("DATABASE_URL")
