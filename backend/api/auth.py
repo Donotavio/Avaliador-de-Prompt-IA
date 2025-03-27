@@ -97,29 +97,19 @@ def send_verification_email(user: User, db: Session) -> bool:
     subject = "Verificação de Conta"
     html_content = f"""
     <html>
-    <head>
-        <style>
-            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-            .header {{ background-color: #4a56e2; color: white; padding: 10px 20px; text-align: center; }}
-            .content {{ padding: 20px; background-color: #f9f9f9; border: 1px solid #ddd; }}
-            .token {{ font-size: 24px; font-weight: bold; text-align: center; margin: 20px 0; padding: 10px; background-color: #eee; }}
-            .footer {{ font-size: 12px; text-align: center; margin-top: 20px; color: #666; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background-color: #4a56e2; color: white; padding: 10px 20px; text-align: center;">
                 <h2>Verificação de Conta</h2>
             </div>
-            <div class="content">
+            <div style="padding: 20px; background-color: #f9f9f9; border: 1px solid #ddd;">
                 <p>Olá {user.full_name},</p>
                 <p>Obrigado por se cadastrar! Para verificar sua conta, utilize o código abaixo:</p>
-                <div class="token">{token}</div>
+                <div style="font-size: 24px; font-weight: bold; text-align: center; margin: 20px 0; padding: 10px; background-color: #eee;">{token}</div>
                 <p>Este código é válido por 15 minutos.</p>
                 <p>Se você não solicitou este código, por favor ignore este e-mail.</p>
             </div>
-            <div class="footer">
+            <div style="font-size: 12px; text-align: center; margin-top: 20px; color: #666;">
                 <p>Esta é uma mensagem automática, por favor não responda.</p>
             </div>
         </div>

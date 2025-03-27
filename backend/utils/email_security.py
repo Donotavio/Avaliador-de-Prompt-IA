@@ -132,27 +132,18 @@ def create_safe_email_template(
     safe_main_content = sanitize_html(main_content)
     safe_footer = sanitize_html(footer)
     
-    # Cria o template básico
+    # Cria o template básico com estilos inline
     email_template = f"""
     <html>
-    <head>
-        <style>
-            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }}
-            .header {{ padding: 20px; background-color: #f8f8f8; border-bottom: 1px solid #ddd; }}
-            .content {{ padding: 20px; }}
-            .footer {{ padding: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #777; }}
-            a {{ color: #0066cc; }}
-        </style>
-    </head>
-    <body>
-        <div class="header">
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+        <div style="padding: 20px; background-color: #f8f8f8; border-bottom: 1px solid #ddd;">
             <h2>{safe_title}</h2>
             <p>{safe_header}</p>
         </div>
-        <div class="content">
+        <div style="padding: 20px;">
             {safe_main_content}
         </div>
-        <div class="footer">
+        <div style="padding: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #777;">
             {safe_footer}
         </div>
     </body>
