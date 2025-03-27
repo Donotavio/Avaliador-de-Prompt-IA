@@ -5,6 +5,7 @@ import PremiumModal from './components/PremiumModal';
 import PaymentSuccessPage from './components/PaymentSuccessPage';
 import { UserIcon, LogoutIcon, LoginIcon } from './components/Icons';
 import PasswordField from './components/PasswordField';
+import { TOKEN_EXPIRED_EVENT } from './services/auth';
 import { API_BASE_URL } from './services/api';
 
 // Ícone de prompt para o logo
@@ -692,6 +693,7 @@ const App: React.FC = () => {
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState<boolean>(false);
   const [isPremium, setIsPremium] = useState<boolean>(false);
   const [userChanged, setUserChanged] = useState<boolean>(false);
+  const [showTokenExpiredModal, setShowTokenExpiredModal] = useState<boolean>(false);
 
   // Função para verificar o status premium do usuário (mover para antes dos useEffect)
   const checkPremiumStatus = useCallback(async () => {
@@ -820,6 +822,32 @@ const App: React.FC = () => {
     }
   }, [userChanged, checkPremiumStatus]);
 
+  // Adicionar listener para evento de token expirado
+  useEffect(() => {
+    const handleTokenExpired = () => {
+      // Limpa dados do usuário
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      localStorage.removeItem('refresh_token');
+      setUserId("anon");
+      setUserName("");
+      setIsLoggedIn(false);
+      setIsAdmin(false);
+      setIsPremium(false);
+      
+      // Mostra modal de login com mensagem de sessão expirada
+      setShowTokenExpiredModal(true);
+    };
+
+    // Adiciona o listener para o evento
+    window.addEventListener(TOKEN_EXPIRED_EVENT, handleTokenExpired);
+
+    // Remove o listener quando o componente for desmontado
+    return () => {
+      window.removeEventListener(TOKEN_EXPIRED_EVENT, handleTokenExpired);
+    };
+  }, []);
+
   return (
     <Router>
       <div className="app">
@@ -884,16 +912,43 @@ const App: React.FC = () => {
           </div>
         </footer>
 
+        {/* Modal de sessão expirada */}
+        {showTokenExpiredModal && (
+          <div className="auth-modal-overlay">
+            <div className="auth-modal-container">
+              <div className="auth-modal-header">
+                <h2 className="auth-modal-title">Sessão Expirada</h2>
+              </div>
+              <div className="auth-modal-content">
+                <p>Sua sessão expirou. Por favor, faça login novamente para continuar.</p>
+                <div className="auth-form-actions">
+                  <button
+                    className="auth-primary-button"
+                    onClick={() => {
+                      setShowTokenExpiredModal(false);
+                      setShowLoginModal(true);
+                    }}
+                  >
+                    Fazer Login
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de login */}
         {showLoginModal && (
-          <LoginModal 
-            onClose={() => setShowLoginModal(false)} 
-            onLoginSuccess={handleLoginSuccess} 
+          <LoginModal
+            onClose={() => setShowLoginModal(false)}
+            onLoginSuccess={handleLoginSuccess}
           />
         )}
 
+        {/* Modal de upgrade para premium */}
         {isPremiumModalOpen && (
-          <PremiumModal 
-            onClose={() => setIsPremiumModalOpen(false)} 
+          <PremiumModal
+            onClose={() => setIsPremiumModalOpen(false)}
             refreshPage={true}
           />
         )}

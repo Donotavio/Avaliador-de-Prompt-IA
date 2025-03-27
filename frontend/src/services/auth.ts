@@ -1,9 +1,5 @@
-import { setCsrfToken, fetchCsrfToken } from './api';
-
-// URL base da API
-const API_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://avaliadorprompt.com.br/api'
-  : 'http://localhost:8000/api';
+import { setCsrfToken, fetchCsrfToken, API_BASE_URL, apiFetch } from './api';
+import { isTokenExpired } from './tokenUtils';
 
 // Interface para dados de login
 interface LoginData {
@@ -17,6 +13,25 @@ interface LoginResponse {
   refresh_token: string;
   token_type: string;
 }
+
+// Interface para perfil do usuário
+export interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string;
+  is_admin: boolean;
+  is_premium: boolean;
+  is_email_verified: boolean;
+}
+
+// Evento personalizado para notificar expiração de token
+export const TOKEN_EXPIRED_EVENT = 'token_expired';
+
+// Função para notificar que o token expirou
+export const notifyTokenExpired = () => {
+  // Dispara um evento para que componentes possam reagir à expiração do token
+  window.dispatchEvent(new CustomEvent(TOKEN_EXPIRED_EVENT));
+};
 
 // Função para fazer login
 export const login = async (data: LoginData): Promise<boolean> => {
@@ -85,6 +100,7 @@ export const logout = async (): Promise<boolean> => {
     // Limpa tokens locais independente da resposta
     localStorage.removeItem('token');
     localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
     setCsrfToken('');
     
     return response.ok;
@@ -94,6 +110,7 @@ export const logout = async (): Promise<boolean> => {
     // Limpa tokens locais mesmo em caso de erro
     localStorage.removeItem('token');
     localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
     setCsrfToken('');
     
     return false;
@@ -102,7 +119,20 @@ export const logout = async (): Promise<boolean> => {
 
 // Função para verificar se o usuário está autenticado
 export const isAuthenticated = (): boolean => {
-  return !!localStorage.getItem('token');
+  const token = localStorage.getItem('token');
+  if (!token) return false;
+  
+  // Verifica se o token está expirado
+  if (isTokenExpired(token)) {
+    // Se expirado, tenta refresh automático
+    refreshToken().catch(() => {
+      // Se o refresh falhar, notifica a expiração do token
+      notifyTokenExpired();
+    });
+    return false;
+  }
+  
+  return true;
 };
 
 // Função para atualizar token JWT usando o refresh token
@@ -113,9 +143,14 @@ export const refreshToken = async (): Promise<boolean> => {
       return false;
     }
 
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    // Verifica se o refresh token também está expirado
+    if (isTokenExpired(refreshToken)) {
+      notifyTokenExpired();
+      return false;
+    }
+
+    const response = await apiFetch('/auth/refresh', {
       method: 'POST',
-      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
       },
@@ -123,6 +158,7 @@ export const refreshToken = async (): Promise<boolean> => {
     });
 
     if (!response.ok) {
+      notifyTokenExpired();
       return false;
     }
 
@@ -141,34 +177,21 @@ export const refreshToken = async (): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error('Erro ao atualizar token:', error);
+    notifyTokenExpired();
     return false;
   }
 };
 
 // Função para obter dados do usuário atual
-export interface UserProfile {
-  id: string;
-  email: string;
-  full_name: string;
-  is_active: boolean;
-  is_admin: boolean;
-}
-
-// Função para obter dados do usuário atual
 export const getCurrentUser = async (): Promise<UserProfile | null> => {
   try {
-    // Verifica se o token está disponível
+    // Verifica se o token está disponível e válido
     if (!isAuthenticated()) {
       return null;
     }
 
-    const response = await fetch(`${API_BASE_URL}/auth/me`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        'Content-Type': 'application/json'
-      },
-      credentials: 'include'
+    const response = await apiFetch('/auth/me', {
+      method: 'GET'
     });
 
     if (!response.ok) {
@@ -178,6 +201,9 @@ export const getCurrentUser = async (): Promise<UserProfile | null> => {
         if (refreshed) {
           // Tenta novamente após atualizar o token
           return getCurrentUser();
+        } else {
+          notifyTokenExpired();
+          return null;
         }
       }
       return null;

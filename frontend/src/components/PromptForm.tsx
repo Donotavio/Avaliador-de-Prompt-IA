@@ -258,36 +258,35 @@ const PromptForm: React.FC<PromptFormProps> = ({ userId, isAdmin, isPremium, ope
       
       console.log('Resposta API completa:', data);
 
-      if (data && data.evaluation) {
-        console.log('Scores recebidos:', data.evaluation.clarity_score, data.evaluation.context_score, data.evaluation.effectiveness_score);
-        
-        // Verificar se há campos adicionais na resposta
-        const hasDetailedAnalysis = 'detailed_analysis' in data.evaluation;
-        if (hasDetailedAnalysis) {
-          console.log('Análise detalhada recebida:', (data.evaluation as any).detailed_analysis);
-        }
-
-        // Se a análise detalhada for uma string, tentamos convertê-la para objeto
-        if (typeof (data.evaluation as any).detailed_analysis === 'string') {
-          try {
-            (data.evaluation as any).detailed_analysis = JSON.parse((data.evaluation as any).detailed_analysis);
-          } catch (e) {
-            console.error('Erro ao parsear detailed_analysis:', e);
-            // Se falhar, criamos um objeto com a string na propriedade central_objective
-            (data.evaluation as any).detailed_analysis = {
-              central_objective: (data.evaluation as any).detailed_analysis
-            };
-          }
-        }
-        
-        setResult(data.evaluation);
-        
-        // Atualizar o contador local após avaliação bem-sucedida
-        if (!isPremium) {
-          incrementEvaluationCount();
-        }
+      // Verificar se os dados estão na estrutura antiga ou nova
+      if (data && 'evaluation' in data) {
+        // Estrutura atual da API com objeto evaluation aninhado
+        console.log('Usando estrutura de resposta com objeto evaluation');
+        setResult(data.evaluation as PromptEvaluation);
       } else {
-        throw new Error('Estrutura de resposta inválida');
+        // Estrutura alternativa ou adaptação necessária
+        console.log('Estrutura de resposta alternativa, adaptando dados');
+        // Adaptar a resposta da API para o formato esperado pelo componente
+        const evaluation: PromptEvaluation = {
+          clarity_score: data.score || 0,
+          context_score: data.score || 0,
+          effectiveness_score: data.score || 0,
+          suggestions: data.suggestions || [],
+          optimized_prompt: data.improved_prompt || '',
+          scores: {
+            average: data.score || 0
+          },
+          detailed_analysis: {
+            central_objective: data.feedback || ''
+          }
+        };
+        
+        setResult(evaluation);
+      }
+      
+      // Atualizar o contador local após avaliação bem-sucedida
+      if (!isPremium) {
+        incrementEvaluationCount();
       }
     } catch (error) {
       console.error('Erro:', error);
