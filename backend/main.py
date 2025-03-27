@@ -11,6 +11,7 @@ import services.openai_patch as openai_patch
 from fastapi import FastAPI, HTTPException, Request, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
 from api.prompt_evaluator import router as prompt_router
+from api.routes import router as routes_router
 from core.evaluator import PromptEvaluator
 from schemas.prompt_schema import (
     PromptRequest,
@@ -119,13 +120,12 @@ else:
     logger.warning("Proteção CSRF desabilitada em ambiente de desenvolvimento")
 
 # Inclui rotas com prefixo API
-app.include_router(auth.router, prefix=API_PREFIX)
-app.include_router(users.router, prefix=API_PREFIX)
-app.include_router(payments.router, prefix=API_PREFIX)
-app.include_router(products.router, prefix=API_PREFIX)
-
-# Inclui rotas de avaliação de prompts
-app.include_router(prompt_router, prefix=API_PREFIX)
+app.include_router(auth.router, prefix="/api", tags=["auth"])
+app.include_router(users.router, prefix="/api", tags=["users"])
+app.include_router(payments.router, prefix="/api", tags=["payments"])
+app.include_router(products.router, prefix="/api", tags=["products"])
+app.include_router(prompt_router, prefix="/api", tags=["prompt_evaluator"])
+app.include_router(routes_router, prefix="/api", tags=["routes"])
 
 # Inicializa o avaliador
 evaluator = PromptEvaluator()

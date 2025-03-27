@@ -7,6 +7,8 @@ import { UserIcon, LogoutIcon, LoginIcon } from './components/Icons';
 import PasswordField from './components/PasswordField';
 import { TOKEN_EXPIRED_EVENT } from './services/auth';
 import { API_BASE_URL } from './services/api';
+// Importando as páginas de rodapé do arquivo de índice
+import { ContactPage, PrivacyPage, TermsPage } from './pages';
 
 // Ícone de prompt para o logo
 const PromptIcon = () => (
@@ -891,6 +893,9 @@ const App: React.FC = () => {
                 <PaymentSuccessPage userId={userId} />
               } />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/contact" element={<ContactPage />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/terms" element={<TermsPage />} />
               {/* Rota fallback para páginas não encontradas */}
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
