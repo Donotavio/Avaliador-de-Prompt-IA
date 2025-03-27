@@ -33,52 +33,51 @@ async def create_payment(
     db: Session = Depends(get_db)
 ) -> Any:
     """
-    Cria um pagamento para assinatura premium
-    
-    Args:
-        subscription_data: Dados da assinatura com informações de produto e do usuário
-        current_user: Usuário autenticado
-        db: Sessão do banco de dados
-        
-    Returns:
-        Objeto com dados de confirmação do pagamento e URL de checkout
+    Cria um novo pagamento com os dados fornecidos
     """
-    # Logs detalhados para diagnóstico
-    logger.info(f"Recebendo solicitação de pagamento para usuário: {current_user.id}")
-    logger.info(f"Dados recebidos: {subscription_data}")
-    
-    # Verifica se o usuário já tem assinatura ativa
-    active_subscription = db.query(Subscription).filter(
-        Subscription.user_id == current_user.id,
-        Subscription.status == "active"
-    ).first()
-    
-    if active_subscription and active_subscription.is_active():
-        return {
-            "message": "Assinatura já está ativa",
-            "subscription_id": active_subscription.id,
-            "status": active_subscription.status
-        }
-    
     try:
-        # Extrair dados do corpo da requisição
-        product_id = subscription_data.get("product_id")
-        user_data = subscription_data.get("user_data", {})
-        payment_method = subscription_data.get("payment_method")
+        # Log completo dos dados recebidos
+        print("=" * 50)
+        print(f"DADOS DE PAGAMENTO RECEBIDOS PARA USUÁRIO: {current_user.id}")
+        print(f"Conteúdo completo da requisição: {subscription_data}")
+        print("=" * 50)
+        
+        # Extrai os dados específicos da requisição
+        product_id = subscription_data.get('product_id')
+        payment_method = subscription_data.get('payment_method', 'PIX')
+        user_data = subscription_data.get('user_data', {})
+        
+        print(f"Método de pagamento: {payment_method}")
+        print(f"ID do produto: {product_id}")
+        print(f"Dados do usuário recebidos: {user_data}")
+        
+        # Verifica se o usuário já tem assinatura ativa
+        active_subscription = db.query(Subscription).filter(
+            Subscription.user_id == current_user.id,
+            Subscription.status.in_(["active", "pending"])
+        ).first()
+        
+        if active_subscription and active_subscription.status == "active":
+            # Usuário já tem assinatura ativa
+            return {
+                "message": "Você já possui uma assinatura ativa",
+                "subscription_id": active_subscription.id,
+                "status": active_subscription.status
+            }
         
         # Validação dos campos obrigatórios
         missing_fields = []
+        
         if not product_id:
-            missing_fields.append("product_id")
+            missing_fields.append("ID do produto")
+            
         if not payment_method:
-            missing_fields.append("payment_method")
+            missing_fields.append("Método de pagamento")
         
         if missing_fields:
-            error_msg = f"Campos obrigatórios ausentes: {', '.join(missing_fields)}"
-            logger.error(error_msg)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_msg
+                detail=f"Campos obrigatórios ausentes: {', '.join(missing_fields)}"
             )
         
         logger.info(f"Produto solicitado: {product_id}")
@@ -133,51 +132,71 @@ async def create_payment(
         # Atualiza dados adicionais do usuário se fornecidos
         updated_user = False
         if user_data:
-            # Dados básicos
-            if "taxId" in user_data and not current_user.tax_id:
+            print(f"Dados do usuário recebidos: {user_data}")
+            
+            # Dados básicos - sempre atualizar
+            if "taxId" in user_data and user_data["taxId"]:
                 current_user.tax_id = user_data["taxId"]
                 updated_user = True
+                print(f"CPF/CNPJ atualizado: {user_data['taxId']}")
                 
-            if "cellphone" in user_data and not current_user.phone:
+            if "cellphone" in user_data and user_data["cellphone"]:
                 current_user.phone = user_data["cellphone"]
                 updated_user = True
+                print(f"Telefone atualizado: {user_data['cellphone']}")
             
             # Dados de endereço - sempre atualizar para garantir informações mais recentes
             if "address" in user_data:
                 current_user.address_street = user_data["address"]
                 updated_user = True
+                print(f"Rua atualizada: {user_data['address']}")
                 
             if "addressNumber" in user_data:
                 current_user.address_number = user_data["addressNumber"]
                 updated_user = True
+                print(f"Número atualizado: {user_data['addressNumber']}")
                 
             if "complement" in user_data:
                 current_user.address_complement = user_data["complement"]
                 updated_user = True
+                print(f"Complemento atualizado: {user_data['complement']}")
                 
             if "neighborhood" in user_data:
                 current_user.address_neighborhood = user_data["neighborhood"]
                 updated_user = True
+                print(f"Bairro atualizado: {user_data['neighborhood']}")
                 
             if "city" in user_data:
                 current_user.address_city = user_data["city"]
                 updated_user = True
+                print(f"Cidade atualizada: {user_data['city']}")
                 
             if "state" in user_data:
                 current_user.address_state = user_data["state"]
                 updated_user = True
+                print(f"Estado atualizado: {user_data['state']}")
                 
             if "postalCode" in user_data:
                 current_user.address_postal_code = user_data["postalCode"]
                 updated_user = True
+                print(f"CEP atualizado: {user_data['postalCode']}")
             
             # Método de pagamento preferido
             current_user.preferred_payment_method = subscription_data.get("payment_method", "PIX")
             updated_user = True
                 
             if updated_user:
-                db.commit()
-                print(f"Dados de usuário atualizados: {current_user.id}")
+                try:
+                    db.commit()
+                    print(f"Dados do usuário atualizados: {current_user.id}")
+                    
+                    # Verificar se os dados foram realmente salvos
+                    db.refresh(current_user)
+                    print(f"Dados após commit: CPF={current_user.tax_id}, Phone={current_user.phone}")
+                    print(f"Endereço completo após atualização: {current_user.address_street}, {current_user.address_number}, {current_user.address_city}/{current_user.address_state}")
+                except Exception as e:
+                    print(f"ERRO AO SALVAR DADOS DO USUÁRIO: {str(e)}")
+                    db.rollback()
         
         # Extrai dados adicionais do usuário
         address_number = user_data.get('addressNumber', '')

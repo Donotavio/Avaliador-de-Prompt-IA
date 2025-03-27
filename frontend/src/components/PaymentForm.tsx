@@ -365,24 +365,22 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, onError }
         webhook_url: window.location.origin + '/api/webhook',
         // Modo de desenvolvimento para testes
         dev_mode: true,
+        // Dados do usuário formatados exatamente como o backend espera
         user_data: {
-          name: localStorage.getItem('userName') || 'Cliente',
-          email: localStorage.getItem('userEmail') || '',
-          tax_id: formData.taxId.replace(/\D/g, ''),
+          taxId: formData.taxId.replace(/\D/g, ''),
           cellphone: formData.cellphone.replace(/\D/g, ''),
-          // Campos de endereço no formato que o backend espera
-          address_street: formData.address,
-          address_number: formData.addressNumber,
-          address_complement: formData.complement || '',
-          address_neighborhood: formData.neighborhood,
-          address_city: formData.city,
-          address_state: formData.state,
-          address_country: 'BR',
-          address_zip_code: formData.postalCode.replace(/\D/g, '')
+          address: formData.address,
+          addressNumber: formData.addressNumber,
+          complement: formData.complement || '',
+          neighborhood: formData.neighborhood,
+          city: formData.city,
+          state: formData.state,
+          postalCode: formData.postalCode.replace(/\D/g, '')
         }
       };
 
-      console.log('Enviando dados de pagamento:', paymentData);
+      // Adiciona log detalhado dos dados que serão enviados
+      console.log('Enviando dados de pagamento completos:', JSON.stringify(paymentData, null, 2));
 
       // Tenta primeiro o caminho padrão do backend
       let response;
