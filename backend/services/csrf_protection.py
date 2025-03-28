@@ -183,7 +183,9 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
             "/api/auth/csrf-token", # Obtenção do token CSRF
             "/api/docs",            # Documentação da API
             "/api/redoc",           # Documentação alternativa
-            "/api/openapi.json"     # Esquema OpenAPI
+            "/api/openapi.json",    # Esquema OpenAPI
+            "/api/auth/verify-email", # Verificação de email
+            "/api/auth/resend-verification" # Reenvio de verificação
         }
         
         # Verifica se o path está isento de proteção CSRF

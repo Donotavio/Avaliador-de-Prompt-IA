@@ -44,6 +44,13 @@ DB_USER="u414788967_don"
 DB_NAME="u414788967_prompt_prod"
 DB_PASSWORD="o75Qr?OC^"
 
+# Configuração de email
+EMAIL_HOST="smtp.hostinger.com"
+EMAIL_PORT="465"
+EMAIL_USER="contato@avaliadorprompt.com"
+EMAIL_PASSWORD="d=q!M@p=L3"
+EMAIL_FROM="contato@avaliadorprompt.com"
+
 # Usando a senha diretamente sem codificação manual
 # A conexão SQLAlchemy tratará isso automaticamente
 DATABASE_URL="mysql+pymysql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
@@ -74,6 +81,44 @@ if grep -q "DATABASE_PASSWORD" backend/.env.production; then
     sed -i '' "s/DATABASE_PASSWORD=.*/DATABASE_PASSWORD=\"$DB_PASSWORD\"/" backend/.env.production
 else
     echo "DATABASE_PASSWORD=\"$DB_PASSWORD\"" >> backend/.env.production
+fi
+
+# Atualiza as credenciais de email no .env.production
+echo -e "${YELLOW}Atualizando credenciais de email no .env.production...${NC}"
+
+# Atualiza EMAIL_HOST
+if grep -q "EMAIL_HOST" backend/.env.production; then
+    sed -i '' "s/EMAIL_HOST=.*/EMAIL_HOST=\"$EMAIL_HOST\"/" backend/.env.production
+else
+    echo "EMAIL_HOST=\"$EMAIL_HOST\"" >> backend/.env.production
+fi
+
+# Atualiza EMAIL_PORT
+if grep -q "EMAIL_PORT" backend/.env.production; then
+    sed -i '' "s/EMAIL_PORT=.*/EMAIL_PORT=$EMAIL_PORT/" backend/.env.production
+else
+    echo "EMAIL_PORT=$EMAIL_PORT" >> backend/.env.production
+fi
+
+# Atualiza EMAIL_USER
+if grep -q "EMAIL_USER" backend/.env.production; then
+    sed -i '' "s/EMAIL_USER=.*/EMAIL_USER=\"$EMAIL_USER\"/" backend/.env.production
+else
+    echo "EMAIL_USER=\"$EMAIL_USER\"" >> backend/.env.production
+fi
+
+# Atualiza EMAIL_PASSWORD com a senha correta
+if grep -q "EMAIL_PASSWORD" backend/.env.production; then
+    sed -i '' "s/EMAIL_PASSWORD=.*/EMAIL_PASSWORD=\"$EMAIL_PASSWORD\"/" backend/.env.production
+else
+    echo "EMAIL_PASSWORD=\"$EMAIL_PASSWORD\"" >> backend/.env.production
+fi
+
+# Atualiza EMAIL_FROM
+if grep -q "EMAIL_FROM" backend/.env.production; then
+    sed -i '' "s/EMAIL_FROM=.*/EMAIL_FROM=\"$EMAIL_FROM\"/" backend/.env.production
+else
+    echo "EMAIL_FROM=\"$EMAIL_FROM\"" >> backend/.env.production
 fi
 
 # Prepara o frontend para produção

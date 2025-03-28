@@ -6,7 +6,7 @@ import PaymentSuccessPage from './components/PaymentSuccessPage';
 import { UserIcon, LogoutIcon, LoginIcon } from './components/Icons';
 import PasswordField from './components/PasswordField';
 import { TOKEN_EXPIRED_EVENT } from './services/auth';
-import { API_BASE_URL } from './services/api';
+import { API_BASE_URL, fetchCsrfToken } from './services/api';
 // Importando as páginas de rodapé do arquivo de índice
 import { ContactPage, PrivacyPage, TermsPage } from './pages';
 
@@ -155,9 +155,16 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
     setIsLoading(true);
 
     try {
+      // Obter token CSRF antes de fazer a requisição
+      const csrfToken = await fetchCsrfToken();
+      
       const response = await fetch(`${API_BASE_URL}/auth/verify-email`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        credentials: 'include',
         body: JSON.stringify({
           token: verificationToken,
           user_id: userId
@@ -213,9 +220,16 @@ const LoginModal: React.FC<{ onClose: () => void; onLoginSuccess: () => void }> 
     setVerificationError(null);
 
     try {
+      // Obter token CSRF antes de fazer a requisição
+      const csrfToken = await fetchCsrfToken();
+      
       const response = await fetch(`${API_BASE_URL}/auth/resend-verification`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        credentials: 'include',
         body: JSON.stringify({ user_id: userId }),
       });
 
