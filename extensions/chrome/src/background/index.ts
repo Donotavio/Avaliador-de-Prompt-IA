@@ -130,15 +130,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const url = `${baseURL}${message.endpoint}`;
           console.log('URL da requisição pelo proxy:', url);
           
-          // Executa a requisição HTTP
+          // Executa a requisição HTTP com um timeout
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos timeout
+          
           fetch(url, {
             method: message.method,
             headers: {
               'Content-Type': 'application/json'
             },
+            signal: controller.signal,
             body: message.method !== 'GET' ? JSON.stringify(message.data) : undefined
           })
           .then(response => {
+            clearTimeout(timeoutId); // Limpa o timeout se a resposta chegar
             console.log('Resposta recebida no proxy, status:', response.status);
             
             if (!response.ok) {

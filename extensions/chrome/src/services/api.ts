@@ -13,6 +13,10 @@ const ENV = {
 
 console.log('INICIALIZANDO API SERVICE');
 
+// Contadores de falhas
+let productionFailureCount = 0;
+const MAX_PRODUCTION_FAILURES = 2;
+
 // Determina o ambiente atual (pode ser configurado via variável armazenada)
 const getEnvironment = async (): Promise<'development' | 'production'> => {
   try {
@@ -40,6 +44,15 @@ const getEnvironment = async (): Promise<'development' | 'production'> => {
 export const getApiBaseUrl = async (): Promise<string> => {
   try {
     const environment = await getEnvironment();
+    
+    // Se tivemos muitas falhas em produção, tenta automaticamente o ambiente de desenvolvimento
+    if (environment === 'production' && productionFailureCount >= MAX_PRODUCTION_FAILURES) {
+      console.warn(`Muitas falhas consecutivas em produção (${productionFailureCount}). Tentando ambiente de desenvolvimento automaticamente.`);
+      const devBaseUrl = ENV.development.API_BASE_URL;
+      console.log('Usando URL base de desenvolvimento temporariamente:', devBaseUrl);
+      return devBaseUrl;
+    }
+    
     const baseUrl = ENV[environment].API_BASE_URL;
     console.log('URL base da API:', baseUrl);
     return baseUrl;
@@ -61,7 +74,7 @@ const createApiInstance = async () => {
       'Content-Type': 'application/json'
     },
     withCredentials: false,
-    timeout: 10000 // Timeout de 10 segundos
+    timeout: 30000 // Aumentado para 30 segundos
   });
 };
 
@@ -121,7 +134,7 @@ export const evaluatePrompt = async (
         const response = await new Promise<any>((resolve, reject) => {
           const messageTimeout = setTimeout(() => {
             reject(new Error('Timeout ao comunicar com background script'));
-          }, 5000); // 5 segundos de timeout
+          }, 35000); // 35 segundos de timeout para permitir que o background script tenha tempo de responder
           
           chrome.runtime.sendMessage(
             {
@@ -168,15 +181,35 @@ export const evaluatePrompt = async (
       const api = await createApiInstance();
       const response = await api.post<PromptResponse>('/prompts/evaluate', promptRequest);
       console.log('Resposta recebida via requisição direta:', response.data);
+      
+      // Reset contador de falhas
+      productionFailureCount = 0;
+      
       return response.data;
     } catch (directError) {
       console.error('Erro na requisição direta:', directError);
+      
+      // Incrementa contador de falhas se for um erro de timeout ou conexão em produção
+      const currentEnv = await getEnvironment();
+      if (currentEnv === 'production' && 
+          directError instanceof Error && 
+          (directError.message.includes('timeout') || directError.message.includes('network'))) {
+        productionFailureCount++;
+        console.warn(`Falha em produção incrementada: ${productionFailureCount}/${MAX_PRODUCTION_FAILURES}`);
+      }
+      
       lastError = directError instanceof Error ? directError : new Error(String(directError));
     }
     
     // Método 3: Fallback para API simulada localmente (quando tudo mais falhar)
     if (lastError) {
       console.warn('Todos os métodos de requisição falharam. Usando simulação local como fallback.');
+      console.warn('Detalhes do último erro:', lastError.name, lastError.message);
+      
+      let errorMessage = "Não foi possível conectar ao servidor.";
+      if (lastError.name === "AxiosError" && lastError.message.includes("timeout")) {
+        errorMessage = "O servidor está demorando muito para responder. Por favor, tente novamente mais tarde.";
+      }
       
       // Simulação de resposta para evitar que a aplicação quebre
       return {
@@ -186,13 +219,14 @@ export const evaluatePrompt = async (
           context_score: 6,
           effectiveness_score: 8,
           suggestions: [
+            `[SIMULAÇÃO LOCAL - ${errorMessage}]`,
             "Adicionar mais contexto sobre o projeto específico",
             "Especificar as tecnologias e frameworks preferidos",
             "Incluir exemplos do estilo de código desejado"
           ],
-          optimized_prompt: `${promptContent}\n\nPor favor, considere as seguintes diretrizes ao responder:\n1. Priorize código limpo e bem documentado\n2. Sugira soluções escaláveis e de alta performance\n3. Siga as melhores práticas para Python e ReactJS`,
+          optimized_prompt: `${promptContent}\n\n[SIMULAÇÃO LOCAL - ${errorMessage}]\n\nPor favor, considere as seguintes diretrizes ao responder:\n1. Priorize código limpo e bem documentado\n2. Sugira soluções escaláveis e de alta performance\n3. Siga as melhores práticas para Python e ReactJS`,
           detailed_analysis: {
-            central_objective: "Obter assistência de programação de alta qualidade",
+            central_objective: `[SIMULAÇÃO LOCAL - ${errorMessage}] Obter assistência de programação de alta qualidade`,
             strengths_weaknesses: "Força: Clareza na expectativa de qualidade. Fraqueza: Falta de contexto específico do projeto.",
             context: "Ambiente de desenvolvimento com Cursor IDE",
             practical_suggestions: "Adicionar mais detalhes sobre o projeto específico e seus requisitos",
