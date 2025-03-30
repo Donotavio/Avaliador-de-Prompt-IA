@@ -117,6 +117,95 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     return true; // Indica que a resposta será assíncrona
   }
+  
+  // Proxy para requisições de API (contorna CORS)
+  if (message.action === 'apiRequest') {
+    console.log('Executando proxy para requisição de API:', message.method, message.endpoint);
+    console.log('Dados da requisição para proxy:', message.data);
+    
+    try {
+      // Obtém a URL base da API
+      api.getApiBaseUrl()
+        .then((baseURL: string) => {
+          const url = `${baseURL}${message.endpoint}`;
+          console.log('URL da requisição pelo proxy:', url);
+          
+          // Executa a requisição HTTP
+          fetch(url, {
+            method: message.method,
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: message.method !== 'GET' ? JSON.stringify(message.data) : undefined
+          })
+          .then(response => {
+            console.log('Resposta recebida no proxy, status:', response.status);
+            
+            if (!response.ok) {
+              throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            return response.json();
+          })
+          .then(data => {
+            console.log('Resposta da API recebida pelo proxy:', data);
+            
+            // Verifica se a resposta contém um erro, mesmo com status 200
+            if (data.error || (data.evaluation && data.evaluation.error)) {
+              const errorMsg = data.error || data.evaluation.error || 'Erro desconhecido na resposta';
+              console.error('Erro no resultado da API:', errorMsg);
+              sendResponse({ 
+                success: false, 
+                error: errorMsg,
+                details: { response: JSON.stringify(data) }
+              });
+              return;
+            }
+            
+            // Verifica se temos uma avaliação válida
+            if (!data.evaluation || !data.evaluation.optimized_prompt) {
+              console.error('Resposta da API não contém uma avaliação válida:', data);
+              sendResponse({ 
+                success: false, 
+                error: 'Resposta da API não contém uma avaliação válida',
+                details: { response: JSON.stringify(data) }
+              });
+              return;
+            }
+            
+            sendResponse({ success: true, data });
+          })
+          .catch((error: Error) => {
+            console.error('Erro no proxy de API durante fetch:', error);
+            sendResponse({ 
+              success: false, 
+              error: error.message || 'Erro na requisição',
+              details: {
+                stack: error.stack,
+                name: error.name
+              }
+            });
+          });
+        })
+        .catch((error: Error) => {
+          console.error('Erro ao obter URL base da API:', error);
+          sendResponse({ 
+            success: false, 
+            error: 'Erro ao obter URL base da API',
+            details: error.message
+          });
+        });
+    } catch (error) {
+      console.error('Erro geral no proxy:', error);
+      sendResponse({ 
+        success: false, 
+        error: 'Erro geral no proxy',
+        details: error instanceof Error ? error.message : 'Erro desconhecido' 
+      });
+    }
+    
+    return true; // Indica que a resposta será assíncrona
+  }
 });
 
 // Função para verificar o status do usuário

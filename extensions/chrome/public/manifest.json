@@ -20,7 +20,9 @@
     "https://huggingface.co/chat/*",
     "https://poe.com/*",
     "https://grok.com/*",
-    "https://chat.deepseek.com/*"
+    "https://chat.deepseek.com/*",
+    "https://avaliadorprompt.com/*",
+    "http://localhost:8000/*"
   ],
   "background": {
     "service_worker": "background.js"
