@@ -4,7 +4,7 @@ Sistema especialista para avaliação e otimização de prompts para Inteligênc
 
 ## Descrição
 
-Este projeto oferece uma interface web para auxiliar usuários na avaliação, otimização e criação de prompts eficazes para interação com modelos de IA como ChatGPT, GPT-4 e DALL·E.
+Este projeto oferece uma interface web e extensão para navegadores para auxiliar usuários na avaliação, otimização e criação de prompts eficazes para interação com modelos de IA como ChatGPT, GPT-4, Claude e outros LLMs.
 
 ## Funcionalidades
 
@@ -13,6 +13,7 @@ Este projeto oferece uma interface web para auxiliar usuários na avaliação, o
 - Análise de clareza e eficácia
 - Verificação de contexto e especificidade
 - Recomendações de melhores práticas
+- Extensão para navegadores (Chrome, Edge, Safari)
 
 ## Tecnologias
 
@@ -27,6 +28,12 @@ Este projeto oferece uma interface web para auxiliar usuários na avaliação, o
 - Material-UI
 - ESLint
 - Prettier
+
+### Extensão para Navegadores
+- React
+- TypeScript
+- Webpack
+- Jest
 
 ## Instalação
 
@@ -46,6 +53,22 @@ cd frontend
 npm install
 ```
 
+### Extensão para Chrome/Edge
+
+```bash
+cd extensions/chrome
+npm install
+npm run build
+```
+
+### Extensão para Safari
+
+```bash
+cd extensions/safari
+npm install
+npm run build
+```
+
 ## Executando o Projeto
 
 ### Backend
@@ -62,6 +85,10 @@ cd frontend
 npm start
 ```
 
+### Extensão para Navegadores
+
+Consulte o arquivo `extensions/README.md` para obter instruções detalhadas sobre como instalar e utilizar a extensão em diferentes navegadores.
+
 ## Estrutura do Projeto
 
 ```bash
@@ -72,9 +99,12 @@ avaliador_prompt_ia/
 │   ├── schemas/
 │   ├── tests/
 │   └── utils/
-└── frontend/
-    ├── public/
-    └── src/
+├── frontend/
+│   ├── public/
+│   └── src/
+└── extensions/
+    ├── chrome/
+    └── safari/
 ```
 
 ## Contribuição

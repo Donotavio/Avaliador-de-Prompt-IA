@@ -1,0 +1,174 @@
+.popup-container {
+  width: 350px;
+  padding: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #2c2c2c;
+  background-color: #ffffff;
+}
+
+.popup-container.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.spinner {
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top: 3px solid #4b2ca8;
+  width: 24px;
+  height: 24px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 10px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #ddd;
+}
+
+.popup-header h1 {
+  margin: 0;
+  font-size: 18px;
+  color: #4b2ca8;
+  font-weight: 600;
+}
+
+.version {
+  color: #666;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.popup-content {
+  margin-bottom: 16px;
+}
+
+.plan-info {
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  padding: 12px;
+  margin-bottom: 16px;
+  border: 1px solid #e0e0e0;
+}
+
+.plan-type {
+  font-weight: 600;
+  color: #4b2ca8;
+  font-size: 15px;
+}
+
+.remaining-evaluations {
+  margin-top: 8px;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  color: #2c2c2c;
+  font-weight: 500;
+}
+
+.popup-instructions {
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #2c2c2c;
+}
+
+.popup-instructions p {
+  margin: 0 0 8px 0;
+}
+
+.environment-selector {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  background-color: #f0f0f0;
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+
+.environment-selector .label {
+  margin-right: 10px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.environment-button {
+  background-color: #e0e0e0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+}
+
+.environment-button.active {
+  background-color: #4b2ca8;
+  color: white;
+  border-color: #4b2ca8;
+}
+
+.env-indicator {
+  margin-left: 10px;
+  font-size: 16px;
+}
+
+.popup-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.button-primary {
+  background-color: #4b2ca8;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  flex: 1;
+}
+
+.button-primary:hover {
+  background-color: #5e3cc4;
+}
+
+.button-secondary {
+  background-color: #f0f0f0;
+  color: #333;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  flex: 1;
+}
+
+.button-secondary:hover {
+  background-color: #e0e0e0;
+}
+
+.popup-footer {
+  font-size: 12px;
+  color: #999;
+  text-align: center;
+  padding-top: 8px;
+  border-top: 1px solid #eee;
+}
+
+.popup-footer p {
+  margin: 0;
+} 
