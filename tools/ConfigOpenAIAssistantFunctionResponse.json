@@ -1,0 +1,76 @@
+{
+    "name": "evaluate_prompt",
+    "description": "Avalia e otimiza um prompt para modelos avançados de IA, fornecendo pontuações, sugestões e uma versão melhorada",
+    "strict": true,
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "clarity_score": {
+                "type": "integer",
+                "description": "Pontuação de clareza de 0 a 10. Avalia se o prompt é claro, específico e facilmente compreensível"
+            },
+            "context_score": {
+                "type": "integer",
+                "description": "Pontuação de contexto de 0 a 10. Avalia se o prompt fornece todas as informações necessárias para entendimento completo"
+            },
+            "effectiveness_score": {
+                "type": "integer",
+                "description": "Pontuação de eficácia de 0 a 10. Avalia se o prompt está formulado para maximizar as chances de se obter o resultado desejado"
+            },
+            "improvement_suggestions": {
+                "type": "array",
+                "description": "Lista de sugestões práticas para melhorar o prompt",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "optimized_prompt": {
+                "type": "string",
+                "description": "Reescrita clara e objetiva do prompt original, incorporando as melhorias sugeridas"
+            },
+            "detailed_analysis": {
+                "type": "object",
+                "properties": {
+                    "central_objective": {
+                        "type": "string",
+                        "description": "Objetivo central identificado no prompt"
+                    },
+                    "strengths_weaknesses": {
+                        "type": "string",
+                        "description": "Pontos fortes e fracos da redação original"
+                    },
+                    "context": {
+                        "type": "string",
+                        "description": "Avaliação se o prompt oferece contexto suficiente e estruturado"
+                    },
+                    "practical_suggestions": {
+                        "type": "string",
+                        "description": "Explicação detalhada sobre as sugestões práticas fornecidas"
+                    },
+                    "ethical_practices": {
+                        "type": "string",
+                        "description": "Avaliação da aderência às melhores práticas éticas em interação com IA"
+                    }
+                },
+                "additionalProperties": false,
+                "required": [
+                    "central_objective",
+                    "strengths_weaknesses",
+                    "context",
+                    "practical_suggestions",
+                    "ethical_practices"
+                ],
+                "description": "Análise detalhada do prompt original"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "clarity_score",
+            "context_score",
+            "effectiveness_score",
+            "improvement_suggestions",
+            "optimized_prompt",
+            "detailed_analysis"
+        ]
+    }
+}
