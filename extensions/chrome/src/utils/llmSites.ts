@@ -53,19 +53,29 @@ export const LLM_SITES: LLMSitesMap = {
 
 export function getCurrentLLMSite(): string | null {
   const hostname = window.location.hostname;
+  console.log('Avaliador de Prompts - Detectando site:', hostname);
+  
+  // Tratar especificamente para chatgpt.com
+  if (hostname === 'chatgpt.com' || hostname.endsWith('.chatgpt.com')) {
+    console.log('Avaliador de Prompts - Site detectado: chatgpt.com');
+    return 'chatgpt.com';
+  }
   
   // Verificar domínios exatos
   if (LLM_SITES[hostname]) {
+    console.log('Avaliador de Prompts - Site detectado (exato):', hostname);
     return hostname;
   }
   
   // Verificar domínios parciais
   for (const site of Object.keys(LLM_SITES)) {
     if (hostname.includes(site)) {
+      console.log('Avaliador de Prompts - Site detectado (parcial):', site);
       return site;
     }
   }
   
+  console.log('Avaliador de Prompts - Nenhum site LLM detectado');
   return null;
 }
 
@@ -73,9 +83,14 @@ export function detectTextAreas(): HTMLElement[] {
   const currentSite = getCurrentLLMSite();
   const elements: HTMLElement[] = [];
   
+  console.log('Avaliador de Prompts - Detectando áreas de texto para site:', currentSite);
+  
   if (currentSite && LLM_SITES[currentSite]) {
     const selector = LLM_SITES[currentSite].textAreaSelector;
+    console.log('Avaliador de Prompts - Usando seletor:', selector);
+    
     const found = document.querySelectorAll(selector);
+    console.log('Avaliador de Prompts - Elementos encontrados:', found.length);
     
     found.forEach((element) => {
       if (element instanceof HTMLElement) {
@@ -84,8 +99,33 @@ export function detectTextAreas(): HTMLElement[] {
     });
   }
   
+  // Seletores específicos para chatgpt.com que podem não estar na configuração padrão
+  if (currentSite === 'chatgpt.com' && elements.length === 0) {
+    console.log('Avaliador de Prompts - Usando seletores alternativos para chatgpt.com');
+    
+    const chatgptSelectors = [
+      'textarea[data-id="root"]', 
+      'textarea[placeholder="Send a message"]',
+      'textarea.text-input',
+      'div[contenteditable="true"]'
+    ];
+    
+    chatgptSelectors.forEach(selector => {
+      const found = document.querySelectorAll(selector);
+      console.log(`Avaliador de Prompts - Seletor alternativo ${selector}:`, found.length);
+      
+      found.forEach(element => {
+        if (element instanceof HTMLElement) {
+          elements.push(element);
+        }
+      });
+    });
+  }
+  
   // Lógica de fallback se não encontrarmos elementos específicos
   if (elements.length === 0) {
+    console.log('Avaliador de Prompts - Usando seletores genéricos');
+    
     const genericSelectors = [
       'textarea:not([readonly])',
       '[contenteditable="true"]',
@@ -93,7 +133,10 @@ export function detectTextAreas(): HTMLElement[] {
     ];
     
     genericSelectors.forEach(selector => {
-      document.querySelectorAll(selector).forEach(element => {
+      const found = document.querySelectorAll(selector);
+      console.log(`Avaliador de Prompts - Seletor genérico ${selector}:`, found.length);
+      
+      found.forEach(element => {
         if (element instanceof HTMLElement && 
             element.offsetWidth > 200 && 
             element.offsetHeight > 30) {
@@ -103,5 +146,6 @@ export function detectTextAreas(): HTMLElement[] {
     });
   }
   
+  console.log('Avaliador de Prompts - Total de áreas de texto encontradas:', elements.length);
   return elements;
 } 

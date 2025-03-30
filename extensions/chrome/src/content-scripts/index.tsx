@@ -32,6 +32,17 @@ class PromptEvaluatorApp {
    */
   private initialize(): void {
     console.log('Inicializando Avaliador de Prompts');
+    console.log('URL atual:', window.location.href);
+    console.log('Hostname:', window.location.hostname);
+    
+    // Verificação específica para chatgpt.com
+    const isChatGPT = window.location.hostname === 'chatgpt.com' || 
+                      window.location.hostname.endsWith('.chatgpt.com') ||
+                      window.location.hostname === 'chat.openai.com';
+                      
+    if (isChatGPT) {
+      console.log('Site ChatGPT detectado! Forçando inicialização...');
+    }
     
     // Criar o container
     this.createContainer();
@@ -41,6 +52,14 @@ class PromptEvaluatorApp {
     
     // Iniciar o processo de detecção
     this.detectAndAddButtons();
+    
+    // Detecção imediata para sites ChatGPT
+    if (isChatGPT) {
+      // Tentar várias vezes nos primeiros segundos
+      setTimeout(() => this.detectAndAddButtons(), 500);
+      setTimeout(() => this.detectAndAddButtons(), 1000);
+      setTimeout(() => this.detectAndAddButtons(), 2000);
+    }
     
     // Detectar novos elementos a cada 3 segundos (como fallback)
     setInterval(() => this.detectAndAddButtons(), 3000);
@@ -88,10 +107,47 @@ class PromptEvaluatorApp {
    * Detecta áreas de texto e adiciona botões a elas
    */
   private detectAndAddButtons(): void {
-    const textAreas = detectTextAreas();
+    console.log('Detectando áreas de texto...');
+    
+    // Verificação adicional para chatgpt.com
+    const isChatGPT = window.location.hostname === 'chatgpt.com' || 
+                      window.location.hostname.endsWith('.chatgpt.com') ||
+                      window.location.hostname === 'chat.openai.com';
+    
+    let textAreas = detectTextAreas();
+    
+    // Tentativas extras para ChatGPT
+    if (isChatGPT && textAreas.length === 0) {
+      console.log('Site ChatGPT detectado mas sem áreas de texto encontradas. Tentando seletores alternativos...');
+      
+      // Seletores específicos para chatgpt.com
+      const chatgptSelectors = [
+        'textarea[data-id="root"]', 
+        'textarea[placeholder="Send a message"]',
+        'textarea.text-input',
+        'div[role="textbox"]',
+        'div.text-input-container textarea'
+      ];
+      
+      for (const selector of chatgptSelectors) {
+        const elements = document.querySelectorAll(selector);
+        console.log(`Seletor alternativo ${selector}: ${elements.length} elementos`);
+        
+        if (elements.length > 0) {
+          elements.forEach(el => {
+            if (el instanceof HTMLElement) {
+              textAreas.push(el);
+            }
+          });
+        }
+      }
+    }
+    
+    console.log(`Total de áreas de texto encontradas: ${textAreas.length}`);
     
     textAreas.forEach(textArea => {
       if (!textArea.dataset.promptEvaluatorButton) {
+        console.log('Adicionando botão a:', textArea);
         // Marca o elemento para evitar duplicação
         textArea.dataset.promptEvaluatorButton = 'true';
         
