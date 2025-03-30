@@ -1,6 +1,10 @@
 import { LLMSitesMap } from '../types';
 
 export const LLM_SITES: LLMSitesMap = {
+  'chatgpt.com': {
+    textAreaSelector: 'textarea[data-id="root"]',
+    submitButtonSelector: 'button[data-testid="send-button"]'
+  },
   'chat.openai.com': {
     textAreaSelector: 'textarea[data-id="root"]',
     submitButtonSelector: 'button[data-testid="send-button"]'
