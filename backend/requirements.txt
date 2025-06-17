@@ -41,7 +41,7 @@ platformdirs==4.3.6
 pluggy==1.5.0
 # Remova esta linha para evitar problemas de autenticação com repositório privado
 # -e git+https://github.com/Donotavio/Avaliador-de-Prompt-IA.git@93b0f292345925f28e29dd4882b93a010c18f5f0#egg=prompt_evaluator&subdirectory=backend
-protobuf==5.29.3
+protobuf==5.29.5
 py4j==0.10.9.7
 pyarrow==19.0.1
 pyasn1==0.6.1
